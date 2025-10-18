@@ -1,0 +1,21 @@
+#include <Arduino.h>
+#include <LoRa.h>
+#include "radio.h"
+
+// Create a LoRaNode with unique address (e.g., 0x02)
+LoRaNode node(0x02, 7);   // node address = 0x02, spreading factor = 7
+
+void setup() {
+    Serial.begin(115200);
+    while (!Serial);
+
+    Serial.println("=== LoRa RECEIVE-ONLY Node Started ===");
+}
+
+void loop() {
+    // Continuously listen for packets
+    int packetSize = LoRa.parsePacket();
+    if (packetSize) {
+        node.onReceive(packetSize);
+    }
+}

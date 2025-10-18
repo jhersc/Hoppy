@@ -1,0 +1,28 @@
+// #include <Arduino.h>
+// #include <LoRa.h>
+// #include "LoRaNode.h"
+
+// // Create a LoRaNode with unique address (e.g., 0x01)
+// LoRaNode node(0x01, 7);   // node address = 0x01, spreading factor = 7
+
+// void setup() {
+//     Serial.begin(9600);
+//     while (!Serial);
+
+//     Serial.println("=== LoRa SEND-ONLY Node Started ===");
+
+//     node.setMessageInterval(3000);  // send every 3 seconds
+// }
+
+// void loop() {
+//     // Send a test message periodically
+//     long now = millis();
+//     static long lastSend = 0;
+
+//     if (now - lastSend > node.getMessageInterval()) {
+//         lastSend = now;
+
+//         String message = "Ping from Tx node 0x" + String(node.getNodeAddress(), HEX);
+//         node.sendMessage(message);
+//     }
+// }
