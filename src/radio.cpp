@@ -158,16 +158,20 @@ void LoRaNode::sendRREQ(const String &dest) {
 // ================== RECEIVE AODV ==================
 void LoRaNode::receiveAODV(const ParsedPacket &pkt) {
     if (pkt.channel_name == "RREQ") {
-        int src_seq, dst_seq, bcast_id, hop, ttl;
-        sscanf(pkt.message.c_str(), "%d||%d||%d||%d||%d", &src_seq, &dst_seq, &bcast_id, &hop, &ttl);
+        unsigned long src_seq, dst_seq;
+        int bcast_id, hop, ttl;
+        sscanf(pkt.message.c_str(), "%lu||%lu||%d||%d||%d", &src_seq, &dst_seq, &bcast_id, &hop, &ttl);
         RREQPacket rreq{pkt.sender, pkt.channel_id, src_seq, dst_seq, bcast_id, hop, ttl};
         handleRREQ(rreq);
     } else if (pkt.channel_name == "RREP") {
-        int dest_seq, hop;
-        sscanf(pkt.message.c_str(), "%d||%d", &dest_seq, &hop);
-        RREPPacket rrep{pkt.channel_id, pkt.sender, dest_seq, hop};
-        handleRREP(rrep);
+    unsigned long dest_seq;
+    int hop;
+
+    sscanf(pkt.message.c_str(), "%lu||%d", &dest_seq, &hop);
+    RREPPacket rrep{pkt.channel_id, pkt.sender, dest_seq, hop};
+    handleRREP(rrep);
     }
+
 }
 
 // ================== HANDLE RREQ ==================
@@ -245,13 +249,28 @@ void LoRaNode::handleLinkBreak(const String &next_hop) {
 
 // ================== PRINT ROUTING TABLE ==================
 void LoRaNode::printRoutingTable() {
-    Serial.println("\n========== ROUTING TABLE (" + address + ") ==========");
+    Serial.println("\n[DBG]========== ROUTING TABLE (" + address + ") ==========");
     for (auto &e : routing_table) {
-        Serial.println("Dest: " + e.second.destination +
+        Serial.println("[DBG]Dest: " + e.second.destination +
                        " | NextHop: " + e.second.next_hop +
                        " | Hops: " + String(e.second.hop_count) +
                        " | Seq: " + String(e.second.sequence_number) +
                        " | Valid: " + String(e.second.valid ? "Yes" : "No"));
     }
-    Serial.println("=====================================================\n");
+    Serial.println("[DBG]=====================================================\n");
 }
+
+
+void LoRaNode::refreshAODVTable() {
+    unsigned long currentTime = millis();
+    for (auto it = routing_table.begin(); it != routing_table.end(); ) {
+        if (it->second.expiration_time < currentTime) {
+            INFO("Route to " + it->first + " expired, removing.");
+            it = routing_table.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+

@@ -133,6 +133,6 @@
  C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
+ .pio/libdeps/esp32dev/LoRa/src/LoRa.h \
  C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src/SPI.h \
- C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-spi.h \
- .pio/libdeps/esp32dev/LoRa/src/LoRa.h
+ C:/Users/jhers/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-spi.h

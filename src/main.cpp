@@ -127,8 +127,8 @@ void loop() {
     }
 
     // ------------------ HEARTBEAT ------------------
-    if (millis() - lastHeartbeat > 5000) {
+    if (millis() - lastHeartbeat > 10000) {
         lastHeartbeat = millis();
-        DBG("Listening...");
+        node.refreshAODVTable();
     }
 }
