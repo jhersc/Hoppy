@@ -37,7 +37,7 @@ struct RREQPacket {
     int dest_seq;
     int broadcast_id;
     int hop_count;
-    int ttl;  // Time-to-live for RREQ
+    int ttl;
 };
 
 struct RREPPacket {
@@ -47,7 +47,7 @@ struct RREPPacket {
     int hop_count;
 };
 
-// ================== LoRa Node ==================
+// ================== LORA NODE CLASS ==================
 class LoRaNode {
 public:
     LoRaNode(String nodeAddress, int spreadingFactor,
@@ -74,6 +74,7 @@ public:
 
 private:
     void parseRawPacket(String raw, ParsedPacket &pkt);
+    void printRoutingTable();
 
     String address;
     int sf;

@@ -1,54 +1,57 @@
 #include <Arduino.h>
 #include <LoRa.h>
-#include "radio.h" // LoRaNode class header
+#include "radio.h"
 
 // ================== NODE SETUP ==================
-// Initialize a LoRa node with address "02" and spreading factor 7
 LoRaNode node("02", 7);
+
+// ================== COLOR LOG MACROS ==================
+#define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
+#define WARN(x)  Serial.println(String("\033[33m[WARN]\033[0m ") + x)
+#define DBG(x)   Serial.println(String("\033[36m[DBG]\033[0m ") + x)
+#define ERR(x)   Serial.println(String("\033[31m[ERR]\033[0m ")  + x)
 
 // ================== ISR FLAGS ==================
 volatile bool hasLoRaPacket = false;
 volatile int lastPacketSize = 0;
 
-// ================== ISR ==================
 void IRAM_ATTR onLoRaEvent(int packetSize) {
     lastPacketSize = packetSize;
     hasLoRaPacket = true;
 }
 
 // ================== SERIAL PARSER ==================
-ParsedPacket parsePacket(String packet) {
-    ParsedPacket result;
-    result.valid = false;
-    packet.trim();
-    if (packet.length() == 0) return result;
+ParsedPacket parseSerialPacket(String line) {
+    ParsedPacket pkt;
+    pkt.valid = false;
+    line.trim();
+    if (line.length() == 0) return pkt;
 
     String parts[8];
     int index = 0;
-
-    while (packet.length() > 0 && index < 8) {
-        int sepIndex = packet.indexOf("||");
+    while (line.length() > 0 && index < 8) {
+        int sepIndex = line.indexOf("||");
         if (sepIndex == -1) {
-            parts[index++] = packet;
+            parts[index++] = line;
             break;
         } else {
-            parts[index++] = packet.substring(0, sepIndex);
-            packet = packet.substring(sepIndex + 2);
+            parts[index++] = line.substring(0, sepIndex);
+            line = line.substring(sepIndex + 2);
         }
     }
 
-    if (index < 8) return result;
+    if (index < 8) return pkt;
 
-    result.timestamp_hex = parts[0];
-    result.channel_name   = parts[1];
-    result.channel_id     = parts[2];
-    result.sender         = parts[3];
-    result.message_id     = parts[4];
-    result.length         = parts[5].toInt();
-    result.is_channel     = (parts[6].toInt() == 1);
-    result.message        = parts[7];
-    result.valid          = true;
-    return result;
+    pkt.timestamp_hex = parts[0];
+    pkt.channel_name  = parts[1];
+    pkt.channel_id    = parts[2];
+    pkt.sender        = parts[3];
+    pkt.message_id    = parts[4];
+    pkt.length        = parts[5].toInt();
+    pkt.is_channel    = (parts[6].toInt() == 1);
+    pkt.message       = parts[7];
+    pkt.valid         = true;
+    return pkt;
 }
 
 // ================== SETUP ==================
@@ -58,70 +61,74 @@ void setup() {
     Serial.begin(115200);
     while (!Serial) {}
 
-    Serial.println("[D] === Initializing LoRa Node ===");
+    INFO("=== Initializing LoRa Node ===");
 
     if (!node.begin()) {
-        Serial.println("[FATAL] LoRa init failed!");
+        ERR("LoRa init failed!");
         while (1);
     }
 
-    Serial.println("[INFO] LoRa init success.");
-
+    INFO("LoRa init success.");
     LoRa.onReceive(onLoRaEvent);
     LoRa.receive();
 }
 
 // ================== MAIN LOOP ==================
 void loop() {
-        // ------------------ SERIAL → LORA ------------------
+    // ------------------ SERIAL → LORA ------------------
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.length() == 0) return;
 
-        // Skip debug/system lines
         if (line.startsWith("[") && line.indexOf("]") != -1) return;
 
-        // Parse the serial line into a ParsedPacket
-        ParsedPacket pkt = parsePacket(line);
+        ParsedPacket pkt = parseSerialPacket(line);
         if (!pkt.valid) {
-            Serial.println("[D] [Parser] Invalid serial packet, discarded.");
+            WARN("Invalid serial packet discarded.");
             return;
         }
 
-        // Send parsed packet via LoRa (uses the LoRaNode::sendMessage(const ParsedPacket &))
-        node.sendMessage(pkt);
-        Serial.println("[LoRa TX] " + line);
+        if (pkt.channel_name == "DATA" && pkt.channel_id.length() > 0) {
+            node.sendDataAODV(pkt.channel_id, pkt.message);
+            INFO("AODV TX: " + pkt.message);
+        } else {
+            node.sendMessage(pkt);
+            DBG("Raw TX: " + line);
+        }
     }
+
 
     // ------------------ LORA → SERIAL ------------------
-if (hasLoRaPacket) {
-    hasLoRaPacket = false;
+    if (hasLoRaPacket) {
+        hasLoRaPacket = false;
 
-    node.processReceived(lastPacketSize);
-    ParsedPacket pkt = node.getLastReceivedPacket();
+        node.processReceived(lastPacketSize);
+        ParsedPacket pkt = node.getLastReceivedPacket();
 
-    if (pkt.valid) {
-        // Convert parsed LoRa packet into the new unified format
-        String out = pkt.timestamp_hex + "||" +         // timestamp_hex
-                     pkt.channel_name + "||" +          // channel_name (placeholder, if unknown)
-                     pkt.channel_id + "||" +         // channel_id (or destination)
-                     pkt.sender + "||" +              // sender
-                     pkt.message_id + "||" +          // message_id
-                     String(pkt.length) + "||" +      // length
-                     String(pkt.is_channel ? 1 : 0) + "||" + // is_channel
-                     pkt.message;                     // message content
+        if (pkt.valid) {
+            String out = pkt.timestamp_hex + "||" +
+                         pkt.channel_name + "||" +
+                         pkt.channel_id + "||" +
+                         pkt.sender + "||" +
+                         pkt.message_id + "||" +
+                         String(pkt.length) + "||" +
+                         String(pkt.is_channel ? 1 : 0) + "||" +
+                         pkt.message;
+            Serial.println(out);
 
-        Serial.println(out); // Echo to Serial for the main MCU to handle
+            if (pkt.channel_name == "RREQ" || pkt.channel_name == "RREP") {
+                node.receiveAODV(pkt);
+            }
+        }
+
+        node.clearLastReceivedPacket();
+        LoRa.receive();
     }
-
-    node.clearLastReceivedPacket();
-    LoRa.receive();
-}
 
     // ------------------ HEARTBEAT ------------------
     if (millis() - lastHeartbeat > 5000) {
         lastHeartbeat = millis();
-        Serial.println("[LoRa] Listening...");
+        DBG("Listening...");
     }
 }

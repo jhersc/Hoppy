@@ -1,5 +1,13 @@
 #include "radio.h"
 
+#define MAX_HOP 10
+
+// ================== LOG HELPERS ==================
+#define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
+#define WARN(x)  Serial.println(String("\033[33m[WARN]\033[0m ") + x)
+#define ERR(x)   Serial.println(String("\033[31m[ERR]\033[0m ")  + x)
+#define DBG(x)   Serial.println(String("\033[36m[DBG]\033[0m ")  + x)
+
 // ================== CONSTRUCTOR ==================
 LoRaNode::LoRaNode(String nodeAddress, int spreadingFactor,
                    int sck, int miso, int mosi, int ss,
@@ -14,12 +22,12 @@ bool LoRaNode::begin(long frequency) {
     LoRa.setPins(pin_ss, pin_rst, pin_dio0);
 
     if (!LoRa.begin(frequency)) {
-        Serial.println("[FATAL] LoRa init failed.");
+        ERR("LoRa init failed.");
         return false;
     }
 
     LoRa.setSpreadingFactor(sf);
-    Serial.println("[INFO] LoRa initialized successfully.");
+    INFO("LoRa initialized successfully at " + String(frequency / 1E6) + " MHz");
     return true;
 }
 
@@ -45,7 +53,7 @@ void LoRaNode::sendMessage(const ParsedPacket &pkt) {
     LoRa.print(packet);
     LoRa.endPacket();
 
-    Serial.println("[LoRa TX] " + packet);
+    DBG("[TX] " + packet);
     LoRa.receive();
 }
 
@@ -57,18 +65,16 @@ void LoRaNode::processReceived(int packetSize) {
     while (LoRa.available()) raw += (char)LoRa.read();
 
     if (raw.isEmpty()) {
-        Serial.println("[D] Empty LoRa payload received.");
+        WARN("Empty LoRa payload received.");
         return;
     }
 
-    Serial.println("[D] RAW RX: " + raw);
+    DBG("RAW RX: " + raw);
     parseRawPacket(raw, received_packet);
 
     if (!received_packet.valid) return;
+    if (received_packet.sender == address) return;
 
-    if (received_packet.sender == address) return; // ignore self
-
-    // Automatically handle AODV packets
     if (received_packet.channel_name == "RREQ" || received_packet.channel_name == "RREP") {
         receiveAODV(received_packet);
     }
@@ -94,20 +100,13 @@ void LoRaNode::parseRawPacket(String raw, ParsedPacket &pkt) {
     parts[7] = raw.substring(lastIndex);
     parts[7].trim();
 
-    int parsedLength = 0;
-    bool parsedIsChannel = false;
-
-    if (parts[5].length() > 0 && parts[5].toInt() >= 0) parsedLength = parts[5].toInt();
-    if (parts[6] == "1") parsedIsChannel = true;
-    else if (parts[6] == "0") parsedIsChannel = false;
-
     pkt.timestamp_hex = parts[0];
     pkt.channel_name  = parts[1];
     pkt.channel_id    = parts[2];
     pkt.sender        = parts[3];
     pkt.message_id    = parts[4];
-    pkt.length        = parsedLength;
-    pkt.is_channel    = parsedIsChannel;
+    pkt.length        = parts[5].toInt();
+    pkt.is_channel    = (parts[6].toInt() == 1);
     pkt.message       = parts[7];
     pkt.valid         = true;
 }
@@ -115,6 +114,7 @@ void LoRaNode::parseRawPacket(String raw, ParsedPacket &pkt) {
 // ================== AODV FUNCTIONS ==================
 void LoRaNode::sendDataAODV(const String &dest, const String &message) {
     if (routing_table.count(dest) && routing_table[dest].valid) {
+        INFO("Found route to " + dest + " via " + routing_table[dest].next_hop);
         ParsedPacket pkt;
         pkt.sender = getAddress();
         pkt.message_id = String(millis());
@@ -126,6 +126,7 @@ void LoRaNode::sendDataAODV(const String &dest, const String &message) {
         pkt.message = message;
         sendMessage(pkt);
     } else {
+        WARN("No route to " + dest + ", sending RREQ...");
         sendRREQ(dest);
     }
 }
@@ -133,14 +134,12 @@ void LoRaNode::sendDataAODV(const String &dest, const String &message) {
 // ================== SEND RREQ ==================
 void LoRaNode::sendRREQ(const String &dest) {
     broadcastCounter++;
-    RREQPacket rreq;
-    rreq.source = getAddress();
-    rreq.destination = dest;
-    rreq.source_seq = millis();
-    rreq.dest_seq = 0;
-    rreq.broadcast_id = broadcastCounter;
-    rreq.hop_count = 0;
-    rreq.ttl = 5; // configurable TTL
+    RREQPacket rreq{getAddress(), dest, millis(), 0, broadcastCounter, 0, MAX_HOP};
+
+    INFO("Sending RREQ to " + dest);
+    DBG("  src_seq=" + String(rreq.source_seq) +
+        " dest_seq=" + String(rreq.dest_seq) +
+        " bcast_id=" + String(rreq.broadcast_id));
 
     ParsedPacket pkt;
     pkt.sender = getAddress();
@@ -153,6 +152,7 @@ void LoRaNode::sendRREQ(const String &dest) {
     pkt.timestamp_hex = String(millis(), HEX);
     pkt.message_id = String(millis());
     sendMessage(pkt);
+    printRoutingTable();
 }
 
 // ================== RECEIVE AODV ==================
@@ -173,21 +173,25 @@ void LoRaNode::receiveAODV(const ParsedPacket &pkt) {
 // ================== HANDLE RREQ ==================
 void LoRaNode::handleRREQ(const RREQPacket &rreq) {
     String key = rreq.source + "_" + String(rreq.broadcast_id);
-    if (seen_broadcasts[key] >= rreq.broadcast_id) return;
+    if (seen_broadcasts[key] >= rreq.broadcast_id) {
+        DBG("Duplicate RREQ ignored from " + rreq.source);
+        return;
+    }
     seen_broadcasts[key] = rreq.broadcast_id;
 
+    INFO("Handling RREQ from " + rreq.source + " to " + rreq.destination);
     if (!routing_table.count(rreq.source) || !routing_table[rreq.source].valid) {
         routing_table[rreq.source] = {rreq.source, rreq.source, rreq.hop_count + 1, rreq.source_seq, true, millis() + 60000};
     }
 
     if (getAddress() == rreq.destination) {
+        INFO("Destination reached (" + address + "), sending RREP");
         sendRREP(rreq.source, rreq.source, 0, rreq.dest_seq);
         return;
     }
 
-    if (rreq.ttl <= 0) return; // discard expired TTL
+    if (rreq.ttl <= 0) return;
 
-    // Rebroadcast with random delay
     RREQPacket newRREQ = rreq;
     newRREQ.hop_count++;
     newRREQ.ttl--;
@@ -203,19 +207,22 @@ void LoRaNode::handleRREQ(const RREQPacket &rreq) {
     pkt.timestamp_hex = String(millis(), HEX);
     pkt.message_id = String(millis());
 
-    unsigned long delay_ms = random(10, 50);
-    delay(delay_ms);
+    delay(random(10, 50));
     sendMessage(pkt);
+    printRoutingTable();
 }
 
 // ================== HANDLE RREP ==================
 void LoRaNode::handleRREP(const RREPPacket &rrep) {
-    routing_table[rrep.destination] = {rrep.destination, rrep.destination, rrep.hop_count,
+    INFO("Received RREP from " + rrep.source + " for " + rrep.destination);
+    routing_table[rrep.destination] = {rrep.destination, rrep.source, rrep.hop_count,
                                        rrep.dest_seq, true, millis() + 60000};
+    printRoutingTable();
 }
 
 // ================== SEND RREP ==================
 void LoRaNode::sendRREP(const String &dest, const String &next_hop, int hop_count, int dest_seq) {
+    INFO("Sending RREP to " + dest);
     ParsedPacket pkt;
     pkt.sender = getAddress();
     pkt.channel_name = "RREP";
@@ -226,6 +233,7 @@ void LoRaNode::sendRREP(const String &dest, const String &next_hop, int hop_coun
     pkt.timestamp_hex = String(millis(), HEX);
     pkt.message_id = String(millis());
     sendMessage(pkt);
+    printRoutingTable();
 }
 
 // ================== LINK BREAK ==================
@@ -233,4 +241,17 @@ void LoRaNode::handleLinkBreak(const String &next_hop) {
     for (auto &entry : routing_table) {
         if (entry.second.next_hop == next_hop) entry.second.valid = false;
     }
+}
+
+// ================== PRINT ROUTING TABLE ==================
+void LoRaNode::printRoutingTable() {
+    Serial.println("\n========== ROUTING TABLE (" + address + ") ==========");
+    for (auto &e : routing_table) {
+        Serial.println("Dest: " + e.second.destination +
+                       " | NextHop: " + e.second.next_hop +
+                       " | Hops: " + String(e.second.hop_count) +
+                       " | Seq: " + String(e.second.sequence_number) +
+                       " | Valid: " + String(e.second.valid ? "Yes" : "No"));
+    }
+    Serial.println("=====================================================\n");
 }
