@@ -49,10 +49,10 @@ struct RREPPacket {
 class LoRaNode {
 public:
     LoRaNode(String nodeAddress, int spreadingFactor,
-             int sck = 13, int miso = 18, int mosi = 19,
-             int ss  = 23, int rst  = 33, int dio0 = 32);
+             int sck = 5, int miso = 6, int mosi = 7,
+             int ss  = 8, int rst  = 0, int dio0 = 1);
 
-    bool begin(long frequency = 915E6);
+    bool begin(long frequency = 433E6);
     void setMessageInterval(unsigned long ms);
 
     void sendMessage(const ParsedPacket &pkt);
