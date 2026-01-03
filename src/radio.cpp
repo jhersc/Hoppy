@@ -1,276 +1,230 @@
 #include "radio.h"
 
-#define MAX_HOP 10
-
 // ================== LOG HELPERS ==================
-#define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
-#define WARN(x)  Serial.println(String("\033[33m[WARN]\033[0m ") + x)
-#define ERR(x)   Serial.println(String("\033[31m[ERR]\033[0m ")  + x)
-#define DBG(x)   Serial.println(String("\033[36m[DBG]\033[0m ")  + x)
+#define INFO(x) Serial.println("[INFO] " + String(x))
+#define WARN(x) Serial.println("[WARN] " + String(x))
+#define DBG(x)  Serial.println("[DBG]  " + String(x))
 
 // ================== CONSTRUCTOR ==================
 LoRaNode::LoRaNode(String nodeAddress, int spreadingFactor,
                    int sck, int miso, int mosi, int ss,
                    int rst, int dio0)
-    : address(nodeAddress), sf(spreadingFactor), messageInterval(0), sendCounter(0),
+    : address(nodeAddress), sf(spreadingFactor),
       pin_sck(sck), pin_miso(miso), pin_mosi(mosi),
       pin_ss(ss), pin_rst(rst), pin_dio0(dio0) {}
 
-// ================== INITIALIZATION ==================
+// ================== INIT ==================
 bool LoRaNode::begin(long frequency) {
     SPI.begin(pin_sck, pin_miso, pin_mosi, pin_ss);
     LoRa.setPins(pin_ss, pin_rst, pin_dio0);
 
     if (!LoRa.begin(frequency)) {
-        ERR("LoRa init failed.");
+        WARN("LoRa init failed");
         return false;
     }
 
     LoRa.setSpreadingFactor(sf);
-    INFO("LoRa initialized successfully at " + String(frequency / 1E6) + " MHz");
+    INFO("LoRa initialized");
     return true;
 }
 
-void LoRaNode::setMessageInterval(unsigned long ms) {
-    messageInterval = ms;
-}
-
-// ================== SEND MESSAGE ==================
-void LoRaNode::sendMessage(const ParsedPacket &pkt) {
-    sendCounter++;
-
-    String packet =
-        pkt.timestamp_hex + "||" +
-        pkt.channel_name  + "||" +
-        pkt.channel_id    + "||" +
-        pkt.sender        + "||" +
-        pkt.message_id    + "||" +
-        String(pkt.length) + "||" +
-        String(pkt.is_channel ? 1 : 0) + "||" +
+// ================== SEND ==================
+void LoRaNode::sendMessage(const Packet &pkt) {
+    String raw =
+        pkt.channel_id + "||" +
+        pkt.message_id + "||" +
+        pkt.sender_id  + "||" +
         pkt.message;
 
     LoRa.beginPacket();
-    LoRa.print(packet);
+    LoRa.print(raw);
     LoRa.endPacket();
 
-    DBG("[TX] " + packet);
+    DBG("TX: " + raw);
     LoRa.receive();
 }
 
-// ================== RECEIVE MESSAGE ==================
+// ================== RECEIVE ==================
 void LoRaNode::processReceived(int packetSize) {
     if (packetSize <= 0) return;
 
     String raw;
     while (LoRa.available()) raw += (char)LoRa.read();
 
-    if (raw.isEmpty()) {
-        WARN("Empty LoRa payload received.");
+    parseRawPacket(raw, received_packet);
+    if (!received_packet.valid) return;
+    if (received_packet.sender_id == address) return;
+
+    DBG("RX: " + raw);
+
+    AODVPacket aodv;
+    if (parseAODVFromPacket(received_packet, aodv)) {
+        handleAODV(aodv);
+    }
+}
+
+// ================== PARSERS ==================
+void LoRaNode::parseRawPacket(const String &raw, Packet &pkt) {
+    pkt.valid = false;
+
+    int i1 = raw.indexOf("||");
+    int i2 = raw.indexOf("||", i1 + 2);
+    int i3 = raw.indexOf("||", i2 + 2);
+
+    if (i1 < 0 || i2 < 0 || i3 < 0) return;
+
+    pkt.channel_id = raw.substring(0, i1);
+    pkt.message_id = raw.substring(i1 + 2, i2);
+    pkt.sender_id  = raw.substring(i2 + 2, i3);
+    pkt.message    = raw.substring(i3 + 2);
+    pkt.valid = true;
+}
+
+bool LoRaNode::parseAODVFromPacket(const Packet &pkt, AODVPacket &aodv) {
+    aodv.valid = false;
+
+    int p = pkt.message.indexOf("||");
+    if (p < 0) return false;
+
+    aodv.type = pkt.message.substring(0, p);
+    String body = pkt.message.substring(p + 2);
+    aodv.sender = pkt.sender_id;
+
+    if (aodv.type == "DATA") {
+        int d = body.indexOf("||");
+        if (d < 0) return false;
+        aodv.destination = body.substring(0, d);
+        aodv.data = body.substring(d + 2);
+        aodv.valid = true;
+    }
+
+    else if (aodv.type == "RREQ") {
+        sscanf(body.c_str(), "%[^|]||%lu||%lu||%d||%d||%d",
+               aodv.destination.c_str(),
+               &aodv.src_seq,
+               &aodv.dst_seq,
+               &aodv.broadcast_id,
+               &aodv.hop_count,
+               &aodv.ttl);
+        aodv.valid = true;
+    }
+
+    else if (aodv.type == "RREP") {
+        sscanf(body.c_str(), "%[^|]||%lu||%d",
+               aodv.destination.c_str(),
+               &aodv.dest_seq,
+               &aodv.hop_count);
+        aodv.valid = true;
+    }
+
+    return aodv.valid;
+}
+
+// ================== AODV SEND ==================
+void LoRaNode::sendDataAODV(const String &dest, const String &message) {
+    if (!routing_table.count(dest) || !routing_table[dest].valid) {
+        INFO("No route to " + dest + ", sending RREQ");
+        sendRREQ(dest);
         return;
     }
 
-    DBG("RAW RX: " + raw);
-    parseRawPacket(raw, received_packet);
+    Packet pkt;
+    pkt.channel_id = "AODV";
+    pkt.message_id = String(millis());
+    pkt.sender_id  = address;
+    pkt.message    = "DATA||" + dest + "||" + message;
+    pkt.valid = true;
 
-    if (!received_packet.valid) return;
-    if (received_packet.sender == address) return;
-
-    if (received_packet.channel_name == "RREQ" || received_packet.channel_name == "RREP") {
-        receiveAODV(received_packet);
-    }
+    sendMessage(pkt);
 }
 
-// ================== PARSER ==================
-void LoRaNode::parseRawPacket(String raw, ParsedPacket &pkt) {
-    pkt.valid = false;
-    raw.trim();
-    if (raw.length() == 0) return;
-
-    String parts[8];
-    int lastIndex = 0;
-    int partIndex = 0;
-
-    for (; partIndex < 7; ++partIndex) {
-        int sepIndex = raw.indexOf("||", lastIndex);
-        if (sepIndex == -1) return;
-        parts[partIndex] = raw.substring(lastIndex, sepIndex);
-        parts[partIndex].trim();
-        lastIndex = sepIndex + 2;
-    }
-    parts[7] = raw.substring(lastIndex);
-    parts[7].trim();
-
-    pkt.timestamp_hex = parts[0];
-    pkt.channel_name  = parts[1];
-    pkt.channel_id    = parts[2];
-    pkt.sender        = parts[3];
-    pkt.message_id    = parts[4];
-    pkt.length        = parts[5].toInt();
-    pkt.is_channel    = (parts[6].toInt() == 1);
-    pkt.message       = parts[7];
-    pkt.valid         = true;
-}
-
-// ================== AODV FUNCTIONS ==================
-void LoRaNode::sendDataAODV(const String &dest, const String &message) {
-    if (routing_table.count(dest) && routing_table[dest].valid) {
-        INFO("Found route to " + dest + " via " + routing_table[dest].next_hop);
-        ParsedPacket pkt;
-        pkt.sender = getAddress();
-        pkt.message_id = String(millis());
-        pkt.timestamp_hex = String(millis(), HEX);
-        pkt.channel_name = "DATA";
-        pkt.channel_id = dest;
-        pkt.length = message.length();
-        pkt.is_channel = false;
-        pkt.message = message;
-        sendMessage(pkt);
-    } else {
-        WARN("No route to " + dest + ", sending RREQ...");
-        sendRREQ(dest);
-    }
-}
-
-// ================== SEND RREQ ==================
 void LoRaNode::sendRREQ(const String &dest) {
     broadcastCounter++;
-    RREQPacket rreq{getAddress(), dest, millis(), 0, broadcastCounter, 0, MAX_HOP};
 
-    INFO("Sending RREQ to " + dest);
-    DBG("  src_seq=" + String(rreq.source_seq) +
-        " dest_seq=" + String(rreq.dest_seq) +
-        " bcast_id=" + String(rreq.broadcast_id));
-
-    ParsedPacket pkt;
-    pkt.sender = getAddress();
-    pkt.channel_name = "RREQ";
-    pkt.channel_id = dest;
-    pkt.message = String(rreq.source_seq) + "||" + String(rreq.dest_seq) + "||" +
-                  String(rreq.broadcast_id) + "||" + String(rreq.hop_count) + "||" + String(rreq.ttl);
-    pkt.length = pkt.message.length();
-    pkt.is_channel = true;
-    pkt.timestamp_hex = String(millis(), HEX);
+    Packet pkt;
+    pkt.channel_id = "AODV";
     pkt.message_id = String(millis());
+    pkt.sender_id  = address;
+    pkt.message =
+        "RREQ||" + dest + "||" +
+        String(millis()) + "||0||" +
+        String(broadcastCounter) + "||0||" +
+        String(MAX_HOP);
+    pkt.valid = true;
+
     sendMessage(pkt);
-    printRoutingTable();
 }
 
-// ================== RECEIVE AODV ==================
-void LoRaNode::receiveAODV(const ParsedPacket &pkt) {
-    if (pkt.channel_name == "RREQ") {
-        unsigned long src_seq, dst_seq;
-        int bcast_id, hop, ttl;
-        sscanf(pkt.message.c_str(), "%lu||%lu||%d||%d||%d", &src_seq, &dst_seq, &bcast_id, &hop, &ttl);
-        RREQPacket rreq{pkt.sender, pkt.channel_id, src_seq, dst_seq, bcast_id, hop, ttl};
-        handleRREQ(rreq);
-    } else if (pkt.channel_name == "RREP") {
-    unsigned long dest_seq;
-    int hop;
+void LoRaNode::sendRREP(const String &dest, int hop, unsigned long seq) {
+    Packet pkt;
+    pkt.channel_id = "AODV";
+    pkt.message_id = String(millis());
+    pkt.sender_id  = address;
+    pkt.message =
+        "RREP||" + dest + "||" +
+        String(seq) + "||" + String(hop);
+    pkt.valid = true;
 
-    sscanf(pkt.message.c_str(), "%lu||%d", &dest_seq, &hop);
-    RREPPacket rrep{pkt.channel_id, pkt.sender, dest_seq, hop};
-    handleRREP(rrep);
-    }
-
+    sendMessage(pkt);
 }
 
-// ================== HANDLE RREQ ==================
-void LoRaNode::handleRREQ(const RREQPacket &rreq) {
-    String key = rreq.source + "_" + String(rreq.broadcast_id);
-    if (seen_broadcasts[key] >= rreq.broadcast_id) {
-        DBG("Duplicate RREQ ignored from " + rreq.source);
-        return;
-    }
-    seen_broadcasts[key] = rreq.broadcast_id;
+// ================== AODV HANDLERS ==================
+void LoRaNode::handleAODV(const AODVPacket &pkt) {
+    if (pkt.type == "RREQ") handleRREQ(pkt);
+    else if (pkt.type == "RREP") handleRREP(pkt);
+}
 
-    INFO("Handling RREQ from " + rreq.source + " to " + rreq.destination);
-    if (!routing_table.count(rreq.source) || !routing_table[rreq.source].valid) {
-        routing_table[rreq.source] = {rreq.source, rreq.source, rreq.hop_count + 1, rreq.source_seq, true, millis() + 60000};
-    }
+void LoRaNode::handleRREQ(const AODVPacket &pkt) {
+    String key = pkt.sender + "_" + String(pkt.broadcast_id);
+    if (seen_broadcasts[key] >= pkt.broadcast_id) return;
+    seen_broadcasts[key] = pkt.broadcast_id;
 
-    if (getAddress() == rreq.destination) {
-        INFO("Destination reached (" + address + "), sending RREP");
-        sendRREP(rreq.source, rreq.source, 0, rreq.dest_seq);
+    routing_table[pkt.sender] = {
+        pkt.sender,
+        pkt.sender,
+        pkt.hop_count + 1,
+        pkt.src_seq,
+        true,
+        millis() + ROUTE_LIFETIME
+    };
+
+    if (pkt.destination == address) {
+        INFO("Destination reached, sending RREP");
+        sendRREP(pkt.sender, 0, pkt.dst_seq);
         return;
     }
 
-    if (rreq.ttl <= 0) return;
-
-    RREQPacket newRREQ = rreq;
-    newRREQ.hop_count++;
-    newRREQ.ttl--;
-
-    ParsedPacket pkt;
-    pkt.sender = getAddress();
-    pkt.channel_name = "RREQ";
-    pkt.channel_id = rreq.destination;
-    pkt.message = String(newRREQ.source_seq) + "||" + String(newRREQ.dest_seq) + "||" +
-                  String(newRREQ.broadcast_id) + "||" + String(newRREQ.hop_count) + "||" + String(newRREQ.ttl);
-    pkt.length = pkt.message.length();
-    pkt.is_channel = true;
-    pkt.timestamp_hex = String(millis(), HEX);
-    pkt.message_id = String(millis());
-
-    delay(random(10, 50));
-    sendMessage(pkt);
-    printRoutingTable();
+    if (pkt.ttl <= 0) return;
+    sendRREQ(pkt.destination);
 }
 
-// ================== HANDLE RREP ==================
-void LoRaNode::handleRREP(const RREPPacket &rrep) {
-    INFO("Received RREP from " + rrep.source + " for " + rrep.destination);
-    routing_table[rrep.destination] = {rrep.destination, rrep.source, rrep.hop_count,
-                                       rrep.dest_seq, true, millis() + 60000};
-    printRoutingTable();
+void LoRaNode::handleRREP(const AODVPacket &pkt) {
+    routing_table[pkt.destination] = {
+        pkt.destination,
+        pkt.sender,
+        pkt.hop_count,
+        pkt.dest_seq,
+        true,
+        millis() + ROUTE_LIFETIME
+    };
 }
 
-// ================== SEND RREP ==================
-void LoRaNode::sendRREP(const String &dest, const String &next_hop, int hop_count, int dest_seq) {
-    INFO("Sending RREP to " + dest);
-    ParsedPacket pkt;
-    pkt.sender = getAddress();
-    pkt.channel_name = "RREP";
-    pkt.channel_id = dest;
-    pkt.message = String(dest_seq) + "||" + String(hop_count);
-    pkt.length = pkt.message.length();
-    pkt.is_channel = true;
-    pkt.timestamp_hex = String(millis(), HEX);
-    pkt.message_id = String(millis());
-    sendMessage(pkt);
-    printRoutingTable();
-}
-
-// ================== LINK BREAK ==================
-void LoRaNode::handleLinkBreak(const String &next_hop) {
-    for (auto &entry : routing_table) {
-        if (entry.second.next_hop == next_hop) entry.second.valid = false;
-    }
-}
-
-// ================== PRINT ROUTING TABLE ==================
-void LoRaNode::printRoutingTable() {
-    Serial.println("\n[DBG]========== ROUTING TABLE (" + address + ") ==========");
-    for (auto &e : routing_table) {
-        Serial.println("[DBG]Dest: " + e.second.destination +
-                       " | NextHop: " + e.second.next_hop +
-                       " | Hops: " + String(e.second.hop_count) +
-                       " | Seq: " + String(e.second.sequence_number) +
-                       " | Valid: " + String(e.second.valid ? "Yes" : "No"));
-    }
-    Serial.println("[DBG]=====================================================\n");
-}
-
-
+// ================== ROUTE MAINT ==================
 void LoRaNode::refreshAODVTable() {
-    unsigned long currentTime = millis();
-    for (auto it = routing_table.begin(); it != routing_table.end(); ) {
-        if (it->second.expiration_time < currentTime) {
-            INFO("Route to " + it->first + " expired, removing.");
+    unsigned long now = millis();
+    for (auto it = routing_table.begin(); it != routing_table.end();) {
+        if (it->second.expiration_time < now)
             it = routing_table.erase(it);
-        } else {
-            ++it;
-        }
+        else ++it;
     }
 }
 
-
+void LoRaNode::printRoutingTable() {
+    Serial.println("\n--- ROUTING TABLE (" + address + ") ---");
+    for (auto &e : routing_table) {
+        Serial.println(
+            e.first + " via " + e.second.next_hop +
+            " hops=" + e.second.hop_count
+        );
+    }
+}

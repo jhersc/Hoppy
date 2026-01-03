@@ -20,37 +20,42 @@ void IRAM_ATTR onLoRaEvent(int packetSize) {
     hasLoRaPacket = true;
 }
 
-// ================== SERIAL PARSER ==================
-ParsedPacket parseSerialPacket(String line) {
-    ParsedPacket pkt;
+// ================== SERIAL → PACKET PARSER ==================
+Packet parseSerialPacket(String line) {
+    Packet pkt;
     pkt.valid = false;
     line.trim();
     if (line.length() == 0) return pkt;
 
-    String parts[8];
-    int index = 0;
-    while (line.length() > 0 && index < 8) {
-        int sepIndex = line.indexOf("||");
-        if (sepIndex == -1) {
-            parts[index++] = line;
-            break;
-        } else {
-            parts[index++] = line.substring(0, sepIndex);
-            line = line.substring(sepIndex + 2);
-        }
+    // Expected formats:
+    // DATA||<dest>||<message>
+    // RAW||<payload>
+
+    if (line.startsWith("DATA||")) {
+        int p1 = line.indexOf("||", 6);
+        if (p1 < 0) return pkt;
+
+        String dest = line.substring(6, p1);
+        String msg  = line.substring(p1 + 2);
+
+        pkt.channel_id = "AODV";
+        pkt.message_id = String(millis());
+        pkt.sender_id  = node.getAddress();
+        pkt.message    = "DATA||" + dest + "||" + msg;
+        pkt.valid = true;
+        return pkt;
     }
 
-    if (index < 8) return pkt;
+    if (line.startsWith("RAW||")) {
+        pkt.channel_id = "RAW";
+        pkt.message_id = String(millis());
+        pkt.sender_id  = node.getAddress();
+        pkt.message    = line.substring(5);
+        pkt.valid = true;
+        return pkt;
+    }
 
-    pkt.timestamp_hex = parts[0];
-    pkt.channel_name  = parts[1];
-    pkt.channel_id    = parts[2];
-    pkt.sender        = parts[3];
-    pkt.message_id    = parts[4];
-    pkt.length        = parts[5].toInt();
-    pkt.is_channel    = (parts[6].toInt() == 1);
-    pkt.message       = parts[7];
-    pkt.valid         = true;
+    WARN("Unknown serial format");
     return pkt;
 }
 
@@ -75,54 +80,41 @@ void setup() {
 
 // ================== MAIN LOOP ==================
 void loop() {
+
     // ------------------ SERIAL → LORA ------------------
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.length() == 0) return;
 
-        if (line.startsWith("[") && line.indexOf("]") != -1) return;
+        if (line.startsWith("DATA||")) {
+            Packet pkt = parseSerialPacket(line);
+            if (!pkt.valid) {
+                WARN("Invalid DATA packet");
+                return;
+            }
 
-        ParsedPacket pkt = parseSerialPacket(line);
-        if (!pkt.valid) {
-            WARN("Invalid serial packet discarded.");
-            return;
-        }
-
-        if (pkt.channel_name == "DATA" && pkt.channel_id.length() > 0) {
-            node.sendDataAODV(pkt.channel_id, pkt.message);
-            INFO("AODV TX: " + pkt.message);
-        } else {
             node.sendMessage(pkt);
-            DBG("Raw TX: " + line);
+            INFO("TX DATA → " + pkt.message);
+        }
+        else {
+            Packet pkt = parseSerialPacket("RAW||" + line);
+            if (!pkt.valid) return;
+
+            node.sendMessage(pkt);
+            DBG("TX RAW → " + pkt.message);
         }
     }
-
 
     // ------------------ LORA → SERIAL ------------------
     if (hasLoRaPacket) {
         hasLoRaPacket = false;
 
         node.processReceived(lastPacketSize);
-        ParsedPacket pkt = node.getLastReceivedPacket();
 
-        if (pkt.valid) {
-            String out = pkt.timestamp_hex + "||" +
-                         pkt.channel_name + "||" +
-                         pkt.channel_id + "||" +
-                         pkt.sender + "||" +
-                         pkt.message_id + "||" +
-                         String(pkt.length) + "||" +
-                         String(pkt.is_channel ? 1 : 0) + "||" +
-                         pkt.message;
-            Serial.println(out);
+        // radio.cpp already handles AODV internally
+        // If you want raw monitoring, you can add hooks later
 
-            if (pkt.channel_name == "RREQ" || pkt.channel_name == "RREP") {
-                node.receiveAODV(pkt);
-            }
-        }
-
-        node.clearLastReceivedPacket();
         LoRa.receive();
     }
 
@@ -130,5 +122,6 @@ void loop() {
     if (millis() - lastHeartbeat > 10000) {
         lastHeartbeat = millis();
         node.refreshAODVTable();
+        DBG("AODV table refreshed");
     }
 }
