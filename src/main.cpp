@@ -3,13 +3,12 @@
 #include "radio.h"
 
 // ================== NODE SETUP ==================
-LoRaNode node("02", 7);
+LoRaNode node("01", 7);
 
-// ================== COLOR LOG MACROS ==================
-#define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
-#define WARN(x)  Serial.println(String("\033[33m[WARN]\033[0m ") + x)
-#define DBG(x)   Serial.println(String("\033[36m[DBG]\033[0m ") + x)
-#define ERR(x)   Serial.println(String("\033[31m[ERR]\033[0m ")  + x)
+#define INFO(x)  Serial.println("[INFO] " + String(x))
+#define WARN(x)  Serial.println("[WARN] " + String(x))
+#define DBG(x)   Serial.println("[DBG]  " + String(x))
+#define ERR(x)   Serial.println("[ERR]  " + String(x))
 
 // ================== ISR FLAGS ==================
 volatile bool hasLoRaPacket = false;
@@ -109,19 +108,15 @@ void loop() {
     // ------------------ LORA → SERIAL ------------------
     if (hasLoRaPacket) {
         hasLoRaPacket = false;
-
         node.processReceived(lastPacketSize);
-
-        // radio.cpp already handles AODV internally
-        // If you want raw monitoring, you can add hooks later
-
         LoRa.receive();
     }
 
     // ------------------ HEARTBEAT ------------------
-    if (millis() - lastHeartbeat > 10000) {
-        lastHeartbeat = millis();
-        node.refreshAODVTable();
-        DBG("AODV table refreshed");
+    static unsigned long lastCleanup = 0;
+    if (millis() - lastCleanup > 30000) {
+        lastCleanup = millis();
+        node.cleanupSeen();
     }
+
 }

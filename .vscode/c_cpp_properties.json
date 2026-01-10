@@ -8,10 +8,10 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/home/euphoria24/Documents/Capstone/Hoppy/include",
-                "/home/euphoria24/Documents/Capstone/Hoppy/src",
-                "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
-                "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
+                "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/include",
+                "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/src",
+                "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
+                "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
@@ -246,10 +246,10 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/home/euphoria24/Documents/Capstone/Hoppy/include",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/src",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
+                    "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/include",
+                    "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/src",
+                    "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
+                    "/home/euphoria24/Documents/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
