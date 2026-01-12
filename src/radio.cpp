@@ -39,7 +39,8 @@ void LoRaNode::sendMessage(const Packet &pkt) {
         pkt.channel_id + "||" +
         pkt.message_id + "||" +
         pkt.sender_id  + "||" +
-        pkt.message;
+        pkt.message  + "||" +
+        pkt.time_stamp;
 
     LoRa.beginPacket();
     LoRa.print(raw);
@@ -55,7 +56,7 @@ void LoRaNode::processReceived(int packetSize) {
     String raw;
     while (LoRa.available()) raw += (char)LoRa.read();
 
-    parseRawPacket(raw, received_packet);
+    parsePacket(raw, received_packet);
     if (!received_packet.valid) return;
 
     // Ignore own packets
@@ -70,19 +71,21 @@ void LoRaNode::processReceived(int packetSize) {
     sendMessage(received_packet);
 }
 
-void LoRaNode::parseRawPacket(const String &raw, Packet &pkt) {
+void LoRaNode::parsePacket(const String &raw, Packet &pkt) {
     pkt.valid = false;
 
     int i1 = raw.indexOf("||");
     int i2 = raw.indexOf("||", i1 + 2);
     int i3 = raw.indexOf("||", i2 + 2);
+    int i4 = raw.indexOf("||", i3 + 2);
 
-    if (i1 < 0 || i2 < 0 || i3 < 0) return;
+    if (i1 < 0 || i2 < 0 || i3 < 0 || i4 < 0) return;
 
     pkt.channel_id = raw.substring(0, i1);
     pkt.message_id = raw.substring(i1 + 2, i2);
     pkt.sender_id  = raw.substring(i2 + 2, i3);
     pkt.message    = raw.substring(i3 + 2);
+    pkt.time_stamp = raw.substring(i4 + 2);
     pkt.valid = true;
 }
 

@@ -12,6 +12,7 @@ struct Packet {
     String message_id;
     String sender_id;
     String message;
+    String time_stamp;
     bool valid;
 };
 
