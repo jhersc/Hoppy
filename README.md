@@ -8,26 +8,26 @@ This guide provides stable wiring configurations to connect either an **ESP-12E 
 
 ### Pin Connection Table
 
-| RA-02 Pin | ESP-12E GPIO    | D Label | Notes                                              |
-| --------- | --------------- | ------- | -------------------------------------------------- |
-| VCC       | 3.3V            | 3V3     | **3.3 V only**, ≥120 mA                            |
-| GND       | GND             | GND     | Common ground                                      |
-| NSS (CS)  | GPIO15          | D8      | LOW at boot → OK for CS                            |
-| SCK       | GPIO14          | D5      | SPI clock                                          |
-| MOSI      | GPIO13          | D7      | SPI MOSI                                           |
-| MISO      | GPIO12          | D6      | SPI MISO                                           |
-| RESET     | GPIO0 or GPIO16 | D3 / D0 | Output only; use GPIO16 if DS3231 alarm → ESP wake |
-| DIO0      | GPIO4           | D2      | IRQ / packet done                                  |
-| DIO1      | GPIO5           | D1      | Optional, used in some libraries                   |
-| DIO2      | —               | —       | Optional                                           |
+| RA-02 Pin | ESP-12E GPIO | D Label | Notes                                          |
+| --------- | ------------ | ------- | ---------------------------------------------- |
+| VCC       | 3.3V         | 3V3     | Stable 3.3V ≥120 mA                            |
+| GND       | GND          | GND     | Common ground                                  |
+| NSS / CS  | GPIO15       | D8      | Boot-safe CS                                   |
+| SCK       | GPIO14       | D5      | SPI clock                                      |
+| MOSI      | GPIO13       | D7      | SPI MOSI                                       |
+| MISO      | GPIO12       | D6      | SPI MISO                                       |
+| RESET     | GPIO2        | D4      | Output only; safe boot pin                     |
+| DIO0      | GPIO0        | D3      | LoRa IRQ, safe after boot (avoid for flashing) |
+| DIO1      | GPIO16       | D0      | Optional LoRa IRQ (cannot be normal interrupt) |
 
-| DS3231 Pin | ESP-12E GPIO | D Label | Notes                                                                |
-| ---------- | ------------ | ------- | -------------------------------------------------------------------- |
-| VCC        | 3.3V         | 3V3     | Some modules allow 5V, ESP is 3.3V logic safe                        |
-| GND        | GND          | GND     | Common ground with ESP & LoRa                                        |
-| SDA        | GPIO4        | D2      | I²C Data line                                                        |
-| SCL        | GPIO5        | D1      | I²C Clock line                                                       |
-| SQW / INT  | GPIO16       | D0      | Optional: connect if you want RTC alarms to wake ESP from deep sleep |
+| DS3231 Pin | ESP-12E GPIO | D Label | Notes                                         |
+| ---------- | ------------ | ------- | --------------------------------------------- |
+| VCC        | 3.3V         | 3V3     | Some modules allow 5V; 3.3V safe for ESP      |
+| GND        | GND          | GND     | Common ground                                 |
+| SDA        | GPIO4        | D2      | Boot-safe I²C data                            |
+| SCL        | GPIO5        | D1      | Boot-safe I²C clock                           |
+| INT / SQW  | GPIO16       | D0      | Optional alarm → can wake ESP from deep sleep |
+
 
 
 
