@@ -45,7 +45,7 @@ private:
     // message_id → timestamp
     std::map<String, unsigned long> seenMessages;
 
-    void parseRawPacket(const String &raw, Packet &pkt);
+    void parsePacket(const String &raw, Packet &pkt);
     bool alreadySeen(const String &msgId);
 };
 
