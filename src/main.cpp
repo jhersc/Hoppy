@@ -3,8 +3,23 @@
 #include "radio.h"
 
 // ================== NODE SETUP ==================
-LoRaNode node("01", 7);
+String generateUniqueId() {
+    // Compact unique ID using millis() in HEX and a small random hex tail
+    char buf[16];
+    // millis() -> hex
+    sprintf(buf, "%lX", millis());
+    String head = String(buf);
+    // random tail (4 hex digits)
+    int tail = random(0, 0x10000); // 0 .. 0xFFFF
+    char tailBuf[8];
+    sprintf(tailBuf, "%X", tail);
+    String tailStr = String(tailBuf);
+    return head + "_" + tailStr;
+}
 
+LoRaNode node(generateUniqueId(), 7);
+
+// ================== COLOR LOG MACROS ==================
 #define INFO(x)  Serial.println("[INFO] " + String(x))
 #define WARN(x)  Serial.println("[WARN] " + String(x))
 #define DBG(x)   Serial.println("[DBG]  " + String(x))
@@ -19,18 +34,18 @@ void IRAM_ATTR onLoRaEvent(int packetSize) {
     hasLoRaPacket = true;
 }
 
-// ================== PACKET PARSER ==================
-Packet parsePacket(String packet) {
-    // EXPEDTED INPUT
-    // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE||TIMESTAMP
+// ================== SERIAL → PACKET PARSER ==================
+Packet parseSerialPacket(String packet) {
+    // EXPECTED INPUT
+    // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE
 
     Packet result;
     result.valid = false;
 
-    String parts[5];
+    String parts[4];
     int index = 0;
 
-    while (packet.length() > 0 && index < 5) {
+    while (packet.length() > 0 && index < 4) {
         int sepIndex = packet.indexOf("||");
         if (sepIndex == -1) {
             parts[index++] = packet;
@@ -40,21 +55,19 @@ Packet parsePacket(String packet) {
             packet = packet.substring(sepIndex + 2);
         }
     }
-    if (index < 5) return result;
+    if (index < 4) return result;
 
     result.channel_id = parts[0];
     result.message_id = parts[1];
     result.sender_id  = parts[2];
     result.message    = parts[3];
-    result.time_stamp = parts[4];
+    result.time_stamp = "";
     result.valid      = true;
 
     return result;
 }
 
 // ================== SETUP ==================
-unsigned long lastHeartbeat = 0;
-
 void setup() {
     Serial.begin(115200);
     while (!Serial) {}
@@ -80,31 +93,29 @@ void loop() {
         line.trim();
         if (line.length() == 0) return;
 
-        // parse the packet
-        Packet pkt = parsePacket(line);
+        // Ignore debug/system lines
+        if (line.startsWith("[D]") || line.startsWith("[LoRa") ||
+            line.startsWith("[INFO") || line.startsWith("[WARN") ||
+            line.startsWith("[DBG") || line.startsWith("[ERR") ||
+            line.startsWith("[FATAL")) return;
+
+        // Parse incoming packet
+        Packet pkt = parseSerialPacket(line);
         if (!pkt.valid) {
-            WARN("Invalid DATA packet");
+            WARN("Invalid packet format");
             return;
         }
-        // transmit it with LoRa
-        node.sendMessage(pkt);
-        INFO("TX DATA → " + pkt.message);
 
+        node.sendMessage(pkt);
+        INFO("TX " + pkt.channel_id + " → " + pkt.message);
     }
 
     // ------------------ LORA → SERIAL ------------------
     if (hasLoRaPacket) {
         hasLoRaPacket = false;
+
         node.processReceived(lastPacketSize);
         LoRa.receive();
     }
-
-    // ------------------ HEARTBEAT ------------------
-    static unsigned long lastCleanup = 0;
-    if (millis() - lastCleanup > 30000) {
-        lastCleanup = millis();
-        node.cleanupSeen();
-    }
-
 }
 

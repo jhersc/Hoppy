@@ -8,10 +8,10 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/home/euphoria24/Documents/Capstone/Hoppy/include",
-                "/home/euphoria24/Documents/Capstone/Hoppy/src",
-                "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp12e/Keypad/src",
-                "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp12e/LoRa/src",
+                "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/include",
+                "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/src",
+                "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/.pio/libdeps/esp12e/Keypad/src",
+                "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/.pio/libdeps/esp12e/LoRa/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/libraries/SPI",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/tools/sdk/include",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/cores/esp8266",
@@ -59,10 +59,10 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/home/euphoria24/Documents/Capstone/Hoppy/include",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/src",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp12e/Keypad/src",
-                    "/home/euphoria24/Documents/Capstone/Hoppy/.pio/libdeps/esp12e/LoRa/src",
+                    "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/include",
+                    "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/src",
+                    "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/.pio/libdeps/esp12e/Keypad/src",
+                    "/home/euphoria24/Documents/Capstone/ESP12/Hoppy/.pio/libdeps/esp12e/LoRa/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/libraries/SPI",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/tools/sdk/include",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif8266/cores/esp8266",

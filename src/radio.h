@@ -3,10 +3,8 @@
 
 #include <Arduino.h>
 #include <LoRa.h>
-#include <map>
 
-#define SEEN_TIMEOUT 60000   // 1 minute
-
+// ================== PACKET ==================
 struct Packet {
     String channel_id;
     String message_id;
@@ -18,20 +16,15 @@ struct Packet {
 
 class LoRaNode {
 public:
-    // LoRaNode(String nodeAddress, int spreadingFactor,
-    //          int sck = 13, int miso = 18, int mosi = 19,
-    //          int ss  = 23, int rst  = 33    , int dio0 = 32);
     LoRaNode(String nodeAddress, int spreadingFactor,
-             int sck = 14, int miso = 12, int mosi = 13,
-             int ss  = 15, int rst  = 16, int dio0 = 4);
-
+             int sck = 5, int miso = 6, int mosi = 7,
+             int ss  = 8, int rst  = 0, int dio0 = 1);
 
     bool begin(long frequency = 433E6);
 
     void sendMessage(const Packet &pkt);
     void processReceived(int packetSize);
 
-    void cleanupSeen();
     String getAddress() const { return address; }
 
 private:
@@ -42,11 +35,7 @@ private:
 
     Packet received_packet;
 
-    // message_id → timestamp
-    std::map<String, unsigned long> seenMessages;
-
-    void parsePacket(const String &raw, Packet &pkt);
-    bool alreadySeen(const String &msgId);
+    void parseRawPacket(const String &raw, Packet &pkt);
 };
 
 #endif
