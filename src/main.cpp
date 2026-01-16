@@ -52,10 +52,10 @@ Packet parseSerialPacket(String line) {
         String dest = line.substring(6, p1);
         String msg  = line.substring(p1 + 2);
 
-        pkt.channel_id = "AODV";
+        pkt.channel_id = "DATA";
         pkt.message_id = String(millis());
         pkt.sender_id  = node.getAddress();
-        pkt.message    = "DATA||" + dest + "||" + msg;
+        pkt.message    = msg;
         pkt.valid = true;
         return pkt;
     }
@@ -74,8 +74,6 @@ Packet parseSerialPacket(String line) {
 }
 
 // ================== SETUP ==================
-unsigned long lastHeartbeat = 0;
-
 void setup() {
     Serial.begin(115200);
     while (!Serial) {}
@@ -125,17 +123,6 @@ void loop() {
         hasLoRaPacket = false;
 
         node.processReceived(lastPacketSize);
-
-        // radio.cpp already handles AODV internally
-        // If you want raw monitoring, you can add hooks later
-
         LoRa.receive();
-    }
-
-    // ------------------ HEARTBEAT ------------------
-    if (millis() - lastHeartbeat > 10000) {
-        lastHeartbeat = millis();
-        node.refreshAODVTable();
-        DBG("AODV table refreshed");
     }
 }
