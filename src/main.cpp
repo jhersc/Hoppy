@@ -20,10 +20,10 @@ String generateUniqueId() {
 LoRaNode node(generateUniqueId(), 7);
 
 // ================== COLOR LOG MACROS ==================
-#define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
-#define WARN(x)  Serial.println(String("\033[33m[WARN]\033[0m ") + x)
-#define DBG(x)   Serial.println(String("\033[36m[DBG]\033[0m ") + x)
-#define ERR(x)   Serial.println(String("\033[31m[ERR]\033[0m ")  + x)
+#define INFO(x)  Serial.println("[INFO] " + String(x))
+#define WARN(x)  Serial.println("[WARN] " + String(x))
+#define DBG(x)   Serial.println("[DBG]  " + String(x))
+#define ERR(x)   Serial.println("[ERR]  " + String(x))
 
 // ================== ISR FLAGS ==================
 volatile bool hasLoRaPacket = false;
@@ -35,42 +35,36 @@ void IRAM_ATTR onLoRaEvent(int packetSize) {
 }
 
 // ================== SERIAL → PACKET PARSER ==================
-Packet parseSerialPacket(String line) {
-    Packet pkt;
-    pkt.valid = false;
-    line.trim();
-    if (line.length() == 0) return pkt;
+Packet parseSerialPacket(String packet) {
+    // EXPEDTED INPUT
+    // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE||TIMESTAMP
 
-    // Expected formats:
-    // DATA||<dest>||<message>
-    // RAW||<payload>
+    Packet result;
+    result.valid = false;
 
-    if (line.startsWith("DATA||")) {
-        int p1 = line.indexOf("||", 6);
-        if (p1 < 0) return pkt;
+    String parts[5];
+    int index = 0;
 
-        String dest = line.substring(6, p1);
-        String msg  = line.substring(p1 + 2);
-
-        pkt.channel_id = "DATA";
-        pkt.message_id = String(millis());
-        pkt.sender_id  = node.getAddress();
-        pkt.message    = msg;
-        pkt.valid = true;
-        return pkt;
+    while (packet.length() > 0 && index < 5) {
+        int sepIndex = packet.indexOf("||");
+        if (sepIndex == -1) {
+            parts[index++] = packet;
+            break;
+        } else {
+            parts[index++] = packet.substring(0, sepIndex);
+            packet = packet.substring(sepIndex + 2);
+        }
     }
+    if (index < 5) return result;
 
-    if (line.startsWith("RAW||")) {
-        pkt.channel_id = "RAW";
-        pkt.message_id = String(millis());
-        pkt.sender_id  = node.getAddress();
-        pkt.message    = line.substring(5);
-        pkt.valid = true;
-        return pkt;
-    }
+    result.channel_id = parts[0];
+    result.message_id = parts[1];
+    result.sender_id  = parts[2];
+    result.message    = parts[3];
+    result.time_stamp = parts[4];
+    result.valid      = true;
 
-    WARN("Unknown serial format");
-    return pkt;
+    return result;
 }
 
 // ================== SETUP ==================
@@ -99,23 +93,21 @@ void loop() {
         line.trim();
         if (line.length() == 0) return;
 
-        if (line.startsWith("DATA||")) {
-            Packet pkt = parseSerialPacket(line);
-            if (!pkt.valid) {
-                WARN("Invalid DATA packet");
-                return;
-            }
+        // Ignore debug/system lines
+        if (line.startsWith("[D]") || line.startsWith("[LoRa") ||
+            line.startsWith("[INFO") || line.startsWith("[WARN") ||
+            line.startsWith("[DBG") || line.startsWith("[ERR") ||
+            line.startsWith("[FATAL")) return;
 
-            node.sendMessage(pkt);
-            INFO("TX DATA → " + pkt.message);
+        // Parse incoming packet
+        Packet pkt = parseSerialPacket(line);
+        if (!pkt.valid) {
+            WARN("Invalid packet format");
+            return;
         }
-        else {
-            Packet pkt = parseSerialPacket("RAW||" + line);
-            if (!pkt.valid) return;
 
-            node.sendMessage(pkt);
-            DBG("TX RAW → " + pkt.message);
-        }
+        node.sendMessage(pkt);
+        INFO("TX " + pkt.channel_id + " → " + pkt.message);
     }
 
     // ------------------ LORA → SERIAL ------------------
