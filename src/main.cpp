@@ -36,7 +36,7 @@ void IRAM_ATTR onLoRaEvent(int packetSize) {
 
 // ================== SERIAL → PACKET PARSER ==================
 Packet parseSerialPacket(String packet) {
-    // EXPEDTED INPUT
+    // EXPECTED INPUT
     // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE||TIMESTAMP
 
     Packet result;
