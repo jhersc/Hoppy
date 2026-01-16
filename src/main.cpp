@@ -3,7 +3,21 @@
 #include "radio.h"
 
 // ================== NODE SETUP ==================
-LoRaNode node("02", 7);
+String generateUniqueId() {
+    // Compact unique ID using millis() in HEX and a small random hex tail
+    char buf[16];
+    // millis() -> hex
+    sprintf(buf, "%lX", millis());
+    String head = String(buf);
+    // random tail (4 hex digits)
+    int tail = random(0, 0x10000); // 0 .. 0xFFFF
+    char tailBuf[8];
+    sprintf(tailBuf, "%X", tail);
+    String tailStr = String(tailBuf);
+    return head + "_" + tailStr;
+}
+
+LoRaNode node(generateUniqueId(), 7);
 
 // ================== COLOR LOG MACROS ==================
 #define INFO(x)  Serial.println(String("\033[32m[INFO]\033[0m ") + x)
