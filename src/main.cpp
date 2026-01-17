@@ -45,7 +45,7 @@ Packet parseSerialPacket(String packet) {
     String parts[5];
     int index = 0;
 
-    while (packet.length() > 0 && index < 5) {
+    while (packet.length() > 0 && index < 4) {
         int sepIndex = packet.indexOf("||");
         if (sepIndex == -1) {
             parts[index++] = packet;
@@ -55,13 +55,13 @@ Packet parseSerialPacket(String packet) {
             packet = packet.substring(sepIndex + 2);
         }
     }
-    if (index < 5) return result;
+    if (index < 4) return result;
 
     result.channel_id = parts[0];
     result.message_id = parts[1];
     result.sender_id  = parts[2];
     result.message    = parts[3];
-    result.time_stamp = parts[4];
+    result.time_stamp = generateUniqueId();
     result.valid      = true;
 
     return result;
@@ -116,5 +116,12 @@ void loop() {
 
         node.processReceived(lastPacketSize);
         LoRa.receive();
+    }
+
+    // ------------------ CLEANUP ------------------
+    static unsigned long lastCleanup = 0;
+    if (millis() - lastCleanup > 30000) {
+        lastCleanup = millis();
+        node.cleanupSeenMessages();
     }
 }

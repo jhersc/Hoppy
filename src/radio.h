@@ -18,13 +18,14 @@ struct Packet {
 class LoRaNode {
 public:
     LoRaNode(String nodeAddress, int spreadingFactor,
-             int sck = 5, int miso = 6, int mosi = 7,
-             int ss  = 8, int rst  = 0, int dio0 = 1);
+             int sck = 13, int miso = 18, int mosi = 19,
+             int ss  = 23, int rst  = 33, int dio0 = 32);
 
     bool begin(long frequency = 433E6);
 
     void sendMessage(const Packet &pkt);
     void processReceived(int packetSize);
+    void cleanupSeenMessages();
 
     String getAddress() const { return address; }
 
@@ -35,8 +36,13 @@ private:
     int pin_sck, pin_miso, pin_mosi, pin_ss, pin_rst, pin_dio0;
 
     Packet received_packet;
+    
+    // message_id → timestamp (for deduplication)
+    std::map<String, unsigned long> seenMessages;
+    static const unsigned long SEEN_TIMEOUT = 60000;  // 1 minute
 
     void parseRawPacket(const String &raw, Packet &pkt);
+    bool alreadySeen(const String &msgId);
 };
 
 #endif
