@@ -117,5 +117,12 @@ void loop() {
         node.processReceived(lastPacketSize);
         LoRa.receive();
     }
+
+    // ------------------ FLOOD CONTROL CLEANUP ------------------
+    static unsigned long lastCleanup = 0;
+    if (millis() - lastCleanup > 30000) {
+        lastCleanup = millis();
+        node.cleanupSeen();
+    }
 }
 

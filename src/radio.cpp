@@ -53,9 +53,17 @@ void LoRaNode::processReceived(int packetSize) {
 
     parseRawPacket(raw, received_packet);
     if (!received_packet.valid) return;
+
+    // Ignore own packets
     if (received_packet.sender_id == address) return;
 
-    DBG("RX: " + raw);
+    // Flood control: don't rebroadcast already-seen messages
+    if (alreadySeen(received_packet.message_id)) return;
+
+    DBG("RX NEW: " + raw);
+
+    // Rebroadcast to other nodes (flooding)
+    sendMessage(received_packet);
 }
 
 // ================== PARSERS ==================
@@ -73,6 +81,23 @@ void LoRaNode::parseRawPacket(const String &raw, Packet &pkt) {
     pkt.sender_id  = raw.substring(i2 + 2, i3);
     pkt.message    = raw.substring(i3 + 2);
     pkt.valid = true;
+}
+
+// ================== FLOOD CONTROL ==================
+bool LoRaNode::alreadySeen(const String &msgId) {
+    if (seenMessages.count(msgId)) return true;
+
+    seenMessages[msgId] = millis();
+    return false;
+}
+
+void LoRaNode::cleanupSeen() {
+    unsigned long now = millis();
+    for (auto it = seenMessages.begin(); it != seenMessages.end();) {
+        if (now - it->second > SEEN_TIMEOUT)
+            it = seenMessages.erase(it);
+        else ++it;
+    }
 }
 
 
