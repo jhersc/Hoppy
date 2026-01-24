@@ -72,6 +72,31 @@ void setup() {
     Serial.begin(115200);
     while (!Serial) {}
 
+    delay(1000);  // Wait for serial stabilization and other ESP32 to boot
+
+    INFO("=== Initializing LoRa Node ===");
+
+    // ========== ESP32 SYNCHRONIZATION ==========
+    // Wait for "ready" message from the other ESP32 before proceeding
+    INFO("Waiting for sync signal from other ESP32...");
+    bool synced = false;
+    
+    while (!synced) {
+        if (Serial.available()) {
+            String syncMsg = Serial.readStringUntil('\n');
+            syncMsg.trim();
+            
+            if (syncMsg == "READY") {
+                INFO("Sync signal received! Proceeding with initialization...");
+                synced = true;
+                break;
+            }
+        }
+        delay(100);  // Small delay to prevent hogging CPU
+    }
+    // ========== END SYNCHRONIZATION ==========
+
+
     INFO("=== Initializing LoRa Node ===");
 
     if (!node.begin()) {
@@ -82,6 +107,8 @@ void setup() {
     INFO("LoRa init success.");
     LoRa.onReceive(onLoRaEvent);
     LoRa.receive();
+    INFO("Node Address: " + node.getAddress());
+    INFO("Waiting for packets...");
 }
 
 // ================== MAIN LOOP ==================
@@ -92,7 +119,10 @@ void loop() {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.length() == 0) return;
-
+        if (line == "RESET") {
+            INFO("Reset request received. Restarting...");
+            ESP.restart();
+        }
         // Ignore debug/system lines
         if (line.startsWith("[D]") || line.startsWith("[LoRa") ||
             line.startsWith("[INFO") || line.startsWith("[WARN") ||
@@ -113,9 +143,8 @@ void loop() {
     // ------------------ LORA → SERIAL ------------------
     if (hasLoRaPacket) {
         hasLoRaPacket = false;
-
         node.processReceived(lastPacketSize);
-        LoRa.receive();
+        LoRa.receive();  // Resume listening
     }
 
     // ------------------ CLEANUP ------------------

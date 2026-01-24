@@ -19,12 +19,16 @@ bool LoRaNode::begin(long frequency) {
     LoRa.setPins(pin_ss, pin_rst, pin_dio0);
 
     if (!LoRa.begin(frequency)) {
-        WARN("LoRa init failed");
+        WARN("LoRa init failed - check wiring/pins");
+        DBG("SPI pins - SCK:" + String(pin_sck) + " MISO:" + String(pin_miso) + 
+            " MOSI:" + String(pin_mosi) + " SS:" + String(pin_ss));
+        DBG("RST pin: " + String(pin_rst) + " DIO0 pin: " + String(pin_dio0));
         return false;
     }
 
     LoRa.setSpreadingFactor(sf);
-    INFO("LoRa initialized");
+    LoRa.setSyncWord(0x34);  // Set sync word (LoRaWAN)
+    INFO("LoRa initialized at " + String(frequency) + "Hz, SF=" + String(sf));
     return true;
 }
 
