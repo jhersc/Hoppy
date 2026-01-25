@@ -47,8 +47,7 @@ void setup() {
 void loop() {
   // Your LoRa code here
 }
-
-
+```
 
 ### Controller Mode
 
