@@ -25,7 +25,8 @@ bool LoRaNode::begin(long frequency) {
         DBG("RST pin: " + String(pin_rst) + " DIO0 pin: " + String(pin_dio0));
         return false;
     }
-
+    
+    LoRa.setTxPower(20, PA_OUTPUT_PA_BOOST_PIN);
     LoRa.setSpreadingFactor(sf);
     LoRa.setSyncWord(0x34);  // Set sync word (LoRaWAN)
     INFO("LoRa initialized at " + String(frequency) + "Hz, SF=" + String(sf));
@@ -34,18 +35,27 @@ bool LoRaNode::begin(long frequency) {
 
 // ================== SEND ==================
 void LoRaNode::sendMessage(const Packet &pkt) {
+    // Create packet with our address as sender
+    Packet outgoing = pkt;
+    outgoing.sender_id = address;
+    
     String raw =
-        pkt.channel_id + "||" +
-        pkt.message_id + "||" +
-        pkt.sender_id  + "||" +
-        pkt.message    + "||" +
-        pkt.time_stamp;
+        outgoing.channel_id + "||" +
+        outgoing.message_id + "||" +
+        outgoing.sender_id  + "||" +
+        outgoing.message    + "||" +
+        outgoing.time_stamp;
 
     LoRa.beginPacket();
     LoRa.print(raw);
     LoRa.endPacket();
 
     DBG("TX: " + raw);
+    Serial.println(raw); // sends to other MCU
+    
+    // Mark this message as sent to avoid immediate self-echo
+    markMessageSent(outgoing.message_id);
+    
     LoRa.receive();
 }
 
@@ -58,12 +68,29 @@ void LoRaNode::processReceived(int packetSize) {
 
     parseRawPacket(raw, received_packet);
     if (!received_packet.valid) return;
-    if (received_packet.sender_id == address) return;
+    
+    // Ignore messages from ourselves
+    if (received_packet.sender_id == address) {
+        DBG("RX (self): " + raw);
+        return;
+    }
+    
+    // Avoid immediate self-echo (received our own transmission)
+    if (recentlySent(received_packet.message_id)) {
+        DBG("RX (echo): " + raw);
+        return;
+    }
     
     // Flood control: ignore duplicates
-    if (alreadySeen(received_packet.message_id)) return;
+    if (alreadySeen(received_packet.message_id)) {
+        DBG("RX (dup): " + raw);
+        return;
+    }
 
     DBG("RX: " + raw);
+    
+    // Mark as seen before rebroadcasting
+    markAsSeen(received_packet.message_id);
     
     // Rebroadcast (flood)
     sendMessage(received_packet);
@@ -89,10 +116,20 @@ void LoRaNode::parseRawPacket(const String &raw, Packet &pkt) {
 }
 
 bool LoRaNode::alreadySeen(const String &msgId) {
-    if (seenMessages.count(msgId)) return true;
-    
+    return seenMessages.count(msgId) > 0;
+}
+
+void LoRaNode::markAsSeen(const String &msgId) {
     seenMessages[msgId] = millis();
+}
+
+bool LoRaNode::recentlySent(const String &msgId) {
+    if (sentMessages.count(msgId)) return true;
     return false;
+}
+
+void LoRaNode::markMessageSent(const String &msgId) {
+    sentMessages[msgId] = millis();
 }
 
 void LoRaNode::cleanupSeenMessages() {
@@ -100,6 +137,13 @@ void LoRaNode::cleanupSeenMessages() {
     for (auto it = seenMessages.begin(); it != seenMessages.end();) {
         if (now - it->second > SEEN_TIMEOUT)
             it = seenMessages.erase(it);
+        else ++it;
+    }
+    
+    // Also cleanup recently sent messages
+    for (auto it = sentMessages.begin(); it != sentMessages.end();) {
+        if (now - it->second > SENT_TIMEOUT)
+            it = sentMessages.erase(it);
         else ++it;
     }
 }

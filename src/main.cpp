@@ -17,7 +17,7 @@ String generateUniqueId() {
     return head + "_" + tailStr;
 }
 
-LoRaNode node(generateUniqueId(), 7);
+LoRaNode node(generateUniqueId(), 8);
 
 // ================== COLOR LOG MACROS ==================
 #define INFO(x)  Serial.println("[INFO] " + String(x))
@@ -135,6 +135,10 @@ void loop() {
             WARN("Invalid packet format");
             return;
         }
+
+        // Mark as seen before sending (serial data from other MCU)
+        // This prevents rebroadcasting messages received from peer MCU
+        node.markAsSeen(pkt.message_id);
 
         node.sendMessage(pkt);
         INFO("TX " + pkt.channel_id + " → " + pkt.message);

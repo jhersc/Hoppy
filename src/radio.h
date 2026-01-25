@@ -26,6 +26,9 @@ public:
     void sendMessage(const Packet &pkt);
     void processReceived(int packetSize);
     void cleanupSeenMessages();
+    void markMessageSent(const String &msgId);
+    void markAsSeen(const String &msgId);
+    bool alreadySeen(const String &msgId);
 
     String getAddress() const { return address; }
 
@@ -40,9 +43,13 @@ private:
     // message_id → timestamp (for deduplication)
     std::map<String, unsigned long> seenMessages;
     static const unsigned long SEEN_TIMEOUT = 60000;  // 1 minute
+    
+    // Track recently sent message IDs to avoid immediate self-echo
+    std::map<String, unsigned long> sentMessages;
+    static const unsigned long SENT_TIMEOUT = 2000;  // 2 seconds
 
     void parseRawPacket(const String &raw, Packet &pkt);
-    bool alreadySeen(const String &msgId);
+    bool recentlySent(const String &msgId);
 };
 
 #endif
