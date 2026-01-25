@@ -47,3 +47,42 @@ void setup() {
 void loop() {
   // Your LoRa code here
 }
+
+
+
+### Controller Mode
+
+| Peripheral                       | Signal   | ESP32 GPIO | Notes           |
+| -------------------------------- | -------- | ---------- | --------------- |
+| **TFT Display (ILI9341, SPI)**   | MOSI     | 23         | Shared SPI      |
+|                                  | MISO     | 19         | Shared SPI      |
+|                                  | SCLK     | 18         | Shared SPI      |
+|                                  | CS       | 5          | TFT chip select |
+|                                  | DC       | 2          | Data / Command  |
+|                                  | RST      | EN         | ESP32 reset     |
+|                                  | VCC      | 3.3V       | Power           |
+|                                  | GND      | GND        | Ground          |
+| **4×5 Keypad**                   | Row 1    | 13         | Output          |
+|                                  | Row 2    | 12         | Output          |
+|                                  | Row 3    | 14         | Output          |
+|                                  | Row 4    | 27         | Output          |
+|                                  | Row 5    | 26         | Output          |
+|                                  | Column 1 | 25         | Input           |
+|                                  | Column 2 | 33         | Input           |
+|                                  | Column 3 | 32         | Input           |
+|                                  | Column 4 | 35         | Input-only      |
+| **RA-02 LoRa (SX1278, SPI)**     | SCK      | 18         | Shared SPI      |
+|                                  | MOSI     | 23         | Shared SPI      |
+|                                  | MISO     | 19         | Shared SPI      |
+|                                  | NSS (CS) | 16         | LoRa CS         |
+|                                  | RST      | 17         | LoRa reset      |
+|                                  | DIO0     | 39         | Input-only IRQ  |
+|                                  | VCC      | 3.3V       | ⚠️ Never 5V     |
+|                                  | GND      | GND        | Ground          |
+| **RTC Module (DS3231 / DS1307)** | SDA      | 21         | I²C Data        |
+|                                  | SCL      | 22         | I²C Clock       |
+|                                  | VCC      | 3.3V       | Power           |
+|                                  | GND      | GND        | Ground          |
+| **USB / Debug**                  | TX0      | 1          | USB serial      |
+|                                  | RX0      | 3          | USB serial      |
+
