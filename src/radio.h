@@ -1,3 +1,10 @@
+// radio.h
+
+/**
+    @file radio.h
+    @brief Handles reception and transmision of LoRa packets
+**/
+
 #ifndef RADIO_H
 #define RADIO_H
 
@@ -5,16 +12,13 @@
 #include <LoRa.h>
 #include <map>
 
-// ================== PACKET ==================
-struct Packet {
-    String channel_id;
-    String message_id;
-    String sender_id;
-    String message;
-    String time_stamp;
-    bool valid;
-};
+#include "globals.h"
 
+/**
+ * @class LoRaNode
+ * @return class LoRaNode
+ * 
+ */
 class LoRaNode {
 public:
     LoRaNode(String nodeAddress, int spreadingFactor,
@@ -22,8 +26,16 @@ public:
              int ss  = 23, int rst  = 33, int dio0 = 32);
 
     bool begin(long frequency = 433E6);
-
-    void sendMessage(const Packet &pkt);
+    
+    
+    /**
+     * @brief constructs a packet then sends it in the format
+     * channel_id||channel_name||sender_id||
+     * 
+     */
+    void sendToLoRa(const Packet &pkt);
+    void sendUart(const Packet &pkt);
+    void sendUartUpdate(const Packet &pkt);
     void processReceived(int packetSize);
     void cleanupSeenMessages();
     void markMessageSent(const String &msgId);
@@ -47,6 +59,16 @@ private:
     // Track recently sent message IDs to avoid immediate self-echo
     std::map<String, unsigned long> sentMessages;
     static const unsigned long SENT_TIMEOUT = 2000;  // 2 seconds
+    
+    // Track sent message IDs with their sent_millis for latency calculation
+    // message_id → sent_millis
+    std::map<String, unsigned long> sentTimestamps;
+    
+    // Track message receive counts for retransmission logic
+    // message_id → receive_count
+    std::map<String, int> messageReceiveCount;
+    static const unsigned long LATENCY_TIMEOUT = 30000;  // 30 seconds
+    static const int MAX_RECEIVE_COUNT = 2;  // Allow retransmitting when not received up to 2 times
 
     void parseRawPacket(const String &raw, Packet &pkt);
     bool recentlySent(const String &msgId);

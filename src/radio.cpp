@@ -34,46 +34,112 @@ bool LoRaNode::begin(long frequency) {
 }
 
 // ================== SEND ==================
-void LoRaNode::sendMessage(const Packet &pkt) {
+void LoRaNode::sendToLoRa(const Packet &pkt) {
+    // Create packet with our address as sender
+    // Packet format: date_and_time||message_id||channel_id||
+    // channel_name||sender_name||sender_id||content
+    Packet outgoing = pkt;
+    outgoing.sender_id = address;
+    
+    String raw =
+        outgoing.date_and_time + "||" +
+        outgoing.message_id    + "||" +
+        outgoing.channel_id    + "||" +
+        outgoing.channel_name  + "||" +
+        outgoing.sender_name   + "||" +
+        outgoing.sender_id     + "||" +
+        outgoing.content;
+        
+    LoRa.beginPacket();
+    LoRa.print(raw);
+    LoRa.endPacket();
+
+    LoRa.receive();
+
+    DBG("LORA_TX: " + raw);
+    outgoing.time_stamp = millis();
+    // if this is ours, then we sent it
+    if (outgoing.sender_id == address) {
+        sentMessages[outgoing.message_id] = outgoing.time_stamp;
+        return;
+    }
+    // if this is theirs, then we mark it as seen
+    seenMessages[outgoing.message_id] = outgoing.time_stamp;
+}
+void LoRaNode::sendUart(const Packet &pkt) {
+    Packet outgoing = pkt;Packet outgoing = pkt;
+    outgoing.sender_id = address;
+    
+
+    String raw =
+                              "msg||" +
+        outgoing.date_and_time + "||" +
+        outgoing.message_id    + "||" +
+        outgoing.channel_id    + "||" +
+        outgoing.channel_name  + "||" +
+        outgoing.sender_name   + "||" +
+        outgoing.sender_id     + "||" +
+        outgoing.content;
+
+    DBG("UART_TX: " + raw);
+    Serial.println(raw); // sends to other MCU
+}
+
+void LoRaNode::sendUartUpdate(const Packet &pkt) {
     // Create packet with our address as sender
     Packet outgoing = pkt;
     outgoing.sender_id = address;
     
     String raw =
-        outgoing.channel_id + "||" +
-        outgoing.message_id + "||" +
-        outgoing.sender_id  + "||" +
-        outgoing.message    + "||" +
-        outgoing.time_stamp;
+        "ack||" +
+        outgoing.message_id    + "||" +
+        String(outgoing.rssi ? outgoing.rssi : -1) + "||" +
+        String(outgoing.snr ? outgoing.snr : -1)   + "||" +
+        String(outgoing.latency ? outgoing.latency : -1);
 
-    LoRa.beginPacket();
-    LoRa.print(raw);
-    LoRa.endPacket();
-
-    DBG("TX: " + raw);
+    DBG("UART_TX: " + raw);
     Serial.println(raw); // sends to other MCU
-    
-    // Mark this message as sent to avoid immediate self-echo
-    markMessageSent(outgoing.message_id);
-    
-    LoRa.receive();
+    seenMessages[outgoing.message_id] = millis();
+     
 }
-
-// ================== RECEIVE ==================
+/**
+ * Process a received LoRa Packet
+ * Sends it to LoRa and UART as needed
+ */
 void LoRaNode::processReceived(int packetSize) {
     if (packetSize <= 0) return;
 
     String raw;
     while (LoRa.available()) raw += (char)LoRa.read();
-
+    received_packet.snr = LoRa.packetSnr();
+    received_packet.rssi = LoRa.packetRssi();  
     parseRawPacket(raw, received_packet);
     if (!received_packet.valid) return;
     
-    // Ignore messages from ourselves
+    // Calculate latency only for our OWN messages (when we receive our own transmission back)
     if (received_packet.sender_id == address) {
-        DBG("RX (self): " + raw);
+
+        if (sentMessages.count(received_packet.message_id)) {
+            unsigned long sent_time = sentMessages[received_packet.message_id];
+            received_packet.latency = millis() - sent_time;
+            DBG("RX: Latency for our message " + received_packet.message_id + " = " + String(received_packet.latency) + "ms");
+
+            // Send ACK via UART
+            // Format: ack||message_id||rssi||snr||latency
+            String lat = "ack||" +
+                received_packet.message_id + "||" +
+                String(received_packet.rssi) + "||" +
+                String(received_packet.snr) + "||" +
+                String(received_packet.latency);
+
+            Serial.println(lat);
+        }
+        // DBG("RX (self): " + raw);
         return;
     }
+    
+    // For neighbor messages, latency remains as received (or 0 if not set)
+    // received_packet.latency = 0;
     
     // Avoid immediate self-echo (received our own transmission)
     if (recentlySent(received_packet.message_id)) {
@@ -87,31 +153,66 @@ void LoRaNode::processReceived(int packetSize) {
         return;
     }
 
+    // Track receive count
+    received_packet.receive_count = ++messageReceiveCount[received_packet.message_id];
+
     DBG("RX: " + raw);
     
     // Mark as seen before rebroadcasting
     markAsSeen(received_packet.message_id);
     
-    // Rebroadcast (flood)
-    sendMessage(received_packet);
+    // Rebroadcast (flood) if receive_count <= MAX_RECEIVE_COUNT
+    if (received_packet.receive_count <= MAX_RECEIVE_COUNT) {
+        sendToLoRa(received_packet);
+    } else {
+        DBG("RX: Skipping rebroadcast - max receive count reached for " + received_packet.message_id);
+    }
 }
 
 // ================== PARSERS ==================
 void LoRaNode::parseRawPacket(const String &raw, Packet &pkt) {
     pkt.valid = false;
+    pkt.latency = 0;
+    pkt.receive_count = 0;
+    // ack||message_id||rssi||snr||latency
+    if (raw.substring(0, 5) == "ack||") {
+        // ACK packet
+        String r = raw.substring(5);
+        int i1 = r.indexOf("||");
+        int i2 = r.indexOf("||", i1 + 2);
+        int i3 = r.indexOf("||", i2 + 2);
+        if (i1 < 0 || i2 < 0 || i3 < 0) return;
+        
+        pkt.message_id = r.substring(0, i1); 
+        pkt.rssi = r.substring(i1 + 2, i2).toInt();
+        pkt.snr  = r.substring(i2 + 2, i3).toFloat();
+        pkt.latency = r.substring(i3 + 2).toInt();
+        pkt.valid = true;
+        return;
+    }
+    /**
+     * msg||date_and_time||message_id||sender_id||
+     * channel_id||sender_name||channel_name||content
+     *  */ 
+    String r = raw.substring(5);
+    int i1 = r.indexOf("||");
+    int i2 = r.indexOf("||", i1 + 2);
+    int i3 = r.indexOf("||", i2 + 2);
+    int i4 = r.indexOf("||", i3 + 2);
+    int i5 = r.indexOf("||", i4 + 2);
+    int i6 = r.indexOf("||", i5 + 2);
+    // int i7 = raw.indexOf("||", i6 + 2);
 
-    int i1 = raw.indexOf("||");
-    int i2 = raw.indexOf("||", i1 + 2);
-    int i3 = raw.indexOf("||", i2 + 2);
-    int i4 = raw.indexOf("||", i3 + 2);
+    if (i1 < 0 || i2 < 0 || i3 < 0 || i4 < 0 || i5 < 0 || i6 < 0) return;
 
-    if (i1 < 0 || i2 < 0 || i3 < 0 || i4 < 0) return;
+    pkt.date_and_time = r.substring(0, i1);
+    pkt.message_id    = r.substring(i1 + 2, i2);
+    pkt.sender_id     = r.substring(i2 + 2, i3);
+    pkt.channel_id    = r.substring(i3 + 2, i4);
+    pkt.sender_name   = r.substring(i4 + 2);
+    pkt.channel_name  = r.substring(i5 + 2, i6);   
+    pkt.content       = r.substring(i6 + 2);
 
-    pkt.channel_id = raw.substring(0, i1);
-    pkt.message_id = raw.substring(i1 + 2, i2);
-    pkt.sender_id  = raw.substring(i2 + 2, i3);
-    pkt.message    = raw.substring(i3 + 2, i4);
-    pkt.time_stamp = raw.substring(i4 + 2);
     pkt.valid = true;
 }
 
@@ -145,5 +246,23 @@ void LoRaNode::cleanupSeenMessages() {
         if (now - it->second > SENT_TIMEOUT)
             it = sentMessages.erase(it);
         else ++it;
+    }
+    
+    // Cleanup sent timestamps for latency calculation
+    for (auto it = sentTimestamps.begin(); it != sentTimestamps.end();) {
+        if (now - it->second > LATENCY_TIMEOUT)
+            it = sentTimestamps.erase(it);
+        else ++it;
+    }
+    
+    // Cleanup message receive counts
+    for (auto it = messageReceiveCount.begin(); it != messageReceiveCount.end();) {
+        // We can clean these up safely since they're time-based anyway
+        // Using same timeout as seen messages
+        if (seenMessages.count(it->first) == 0) {
+            it = messageReceiveCount.erase(it);
+        } else {
+            ++it;
+        }
     }
 }

@@ -1,0 +1,28 @@
+make it able to send by this format:
+
+LoRa
+String lora_message = "
+                         msg||channel_id
+                            ||channel_name
+                            ||sender_id
+                            ||message_id
+                            ||date_and_time
+                            ||content
+                      "
+String ack = "ack||message_id"
+
+UART
+// message
+String message = "
+                    msg||date_and_time
+                       ||message_id
+                       ||sender_id
+                       ||channel_id
+                       ||sender_name
+                       ||channel_name
+                       ||content
+                       ||rssi
+                       ||snr
+                 "
+String ack = "ack||message_id"
+
