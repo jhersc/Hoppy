@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include <LoRa.h>
 #include <map>
+#include "preferencesHandler.h"
 
 #include "globals.h"
 
@@ -34,13 +35,9 @@ public:
      * 
      */
     void sendToLoRa(const Packet &pkt);
-    void sendUart(const Packet &pkt);
-    void sendUartUpdate(const Packet &pkt);
+    void sendToController(const Packet &pkt);
     void processReceived(int packetSize);
-    void cleanupSeenMessages();
-    void markMessageSent(const String &msgId);
-    void markAsSeen(const String &msgId);
-    bool alreadySeen(const String &msgId);
+
 
     String getAddress() const { return address; }
 
@@ -70,7 +67,6 @@ private:
     static const unsigned long LATENCY_TIMEOUT = 30000;  // 30 seconds
     static const int MAX_RECEIVE_COUNT = 2;  // Allow retransmitting when not received up to 2 times
 
-    void parseRawPacket(const String &raw, Packet &pkt);
     bool recentlySent(const String &msgId);
 };
 

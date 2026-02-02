@@ -1,8 +1,9 @@
 #include <Arduino.h>
 #include <LoRa.h>
 #include "radio.h"
+#include "preferencesHandler.h"
 
-double last_millis = 0;
+
 // ================== NODE SETUP ==================
 String generateUniqueId() {
     // Compact unique ID using millis() in HEX and a small random hex tail
@@ -33,74 +34,6 @@ volatile int lastPacketSize = 0;
 void IRAM_ATTR onLoRaEvent(int packetSize) {
     lastPacketSize = packetSize;
     hasLoRaPacket = true;
-}
-
-// ================== SERIAL → PACKET PARSER ==================
-Packet parseSerialPacket(String packet) {
-    // EXPECTED INPUT
-    // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE||TIMESTAMP
-
-    Packet result;
-    result.valid = false;
-
-    String parts[5];
-    int index = 0;
-
-    while (packet.length() > 0 && index < 5) {
-        int sepIndex = packet.indexOf("||");
-        if (sepIndex == -1) {
-            parts[index++] = packet;
-            break;
-        } else {
-            parts[index++] = packet.substring(0, sepIndex);
-            packet = packet.substring(sepIndex + 2);
-        }
-    }
-    if (index < 5) return result;
-
-    result.channel_id = parts[0];
-    result.message_id = parts[1];
-    result.sender_id  = parts[2];
-    result.content    = parts[3];
-    result.date_and_time = parts[4];
-    result.valid      = true;
-
-    return result;
-}
-
-Packet parseLoRaPacket(String packet) {
-    // EXPECTED INPUT
-    // CHANNEL_ID||MESSAGE_ID||SENDER_ID||MESSAGE||TIMESTAMP||RSSI||SNR||LATENCY
-
-    Packet result;
-    result.valid = false;
-
-    String parts[8];
-    int index = 0;
-
-    while (packet.length() > 0 && index < 8) {
-        int sepIndex = packet.indexOf("||");
-        if (sepIndex == -1) {
-            parts[index++] = packet;
-            break;
-        } else {
-            parts[index++] = packet.substring(0, sepIndex);
-            packet = packet.substring(sepIndex + 2);
-        }
-    }
-    if (index < 8) return result;
-
-    result.channel_id = parts[0];
-    result.message_id = parts[1];
-    result.sender_id  = parts[2];
-    result.message    = parts[3];
-    result.date_and_time = parts[4];
-    result.RSSI       = parts[5].toInt();
-    result.SNR        = parts[6].toFloat();
-    result.latency    = parts[7].toInt();
-    result.valid      = true;
-
-    return result;
 }
 
 // ================== SETUP ==================
@@ -145,6 +78,7 @@ void setup() {
     LoRa.receive();
     INFO("Node Address: " + node.getAddress());
     INFO("Waiting for packets...");
+    PreferencesHandlerBegin();
 }
 
 // ================== MAIN LOOP ==================
@@ -166,23 +100,16 @@ void loop() {
             line.startsWith("[FATAL")) return;
 
         // Parse incoming packet
-        // Accept DATA|| prefixed packets
-        if (line.startsWith("DATA||")) {
-            line = line.substring(6); // strip "DATA||"
-        }
-
-        Packet pkt = parseSerialPacket(line);
+        Packet pkt;
+        parseRawPacket(line, pkt);
         if (!pkt.valid) {
             WARN("Invalid packet format");
             return;
         }
 
-        // Mark as seen before sending (serial data from other MCU)
-        // This prevents rebroadcasting messages received from peer MCU
-        node.markAsSeen(pkt.message_id);
-        last_millis = millis();
-        node.sendMessage(pkt);
-        INFO("TX " + pkt.channel_id + " → " + pkt.message);
+        
+        node.sendToController(pkt);
+        INFO("TX " + pkt.channel_id + " → " + pkt.content);
     }
 
     // ------------------ LORA → SERIAL ------------------
@@ -196,6 +123,9 @@ void loop() {
     static unsigned long lastCleanup = 0;
     if (millis() - lastCleanup > 30000) {
         lastCleanup = millis();
-        node.cleanupSeenMessages();
+        // node.cleanupSeenMessages();
+        // for message in sentMessage.timestamps:
+        //      if message.timestamp > 30000:
+        //          delete(message_id)
     }
 }

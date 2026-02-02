@@ -2,23 +2,18 @@
 #include <Preferences.h>
 
 
-struct Packet {
+struct PrefsPacket {
     // PACKET DATA
-    char time_sent[20];
+    char date_and_time[20];
+    char sender_name[16];
     char channel_name[16];
     char channel_id[8];
     char sender_id[8];
     char message_id[8];
-    int length;
-    bool is_channel;
-    char message[64];
-
-    // METADATA
-    uint8_t spreading_factor;
-    short rssi;
+    char content[64];
+    int rssi;
     float snr;
-    char time_received[20];
-    float latency_ms;
+    float latency;
     bool valid;
 };
 
@@ -36,23 +31,20 @@ String generateUniqueId() {
 }
 
 
-void storePacket(const Packet &pkt) {
-    String packet = String(pkt.time_sent) + "||" +
-                    String(pkt.channel_name) + "||" +
-                    String(pkt.channel_id) + "||" +
-                    String(pkt.sender_id) + "||" +
-                    String(pkt.message_id) + "||" +
-                    String(pkt.length) + "||" +
-                    String(pkt.is_channel ? 1 : 0) + "||" +
-                    String(pkt.message) + "||" +
-                    String(pkt.spreading_factor) + "||" +
-                    String(pkt.rssi) + "||" +
-                    String(pkt.snr) + "||" +
-                    String(pkt.time_received) + "||" +
-                    String(pkt.latency_ms) + "||" +
-                    String(pkt.valid ? 1 : 0);
+void storePacket(const PrefsPacket &outgoing) {
+    String packet = 
+        String(outgoing.date_and_time) + "||" +
+        String(outgoing.message_id)    + "||" +
+        String(outgoing.channel_id)    + "||" +
+        String(outgoing.channel_name)  + "||" +
+        String(outgoing.sender_name)   + "||" +
+        String(outgoing.sender_id)     + "||" +
+        String(outgoing.content)       + "||" +
+        String(outgoing.rssi ? outgoing.rssi : -1) + "||" +
+        String(outgoing.snr ? outgoing.snr : -1)   + "||" +
+        String(outgoing.latency ? outgoing.latency : -1);
                     
-    prefs.putString(("packet_" + generateUniqueId()).c_str(), packet.c_str());
+    prefs.putString(("packet_" + String(outgoing.date_and_time)).c_str(), packet.c_str());
 }
 
 void PreferencesHandlerBegin() {
