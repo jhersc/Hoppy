@@ -34,24 +34,22 @@ bool LoRaNode::begin(long frequency) {
 }
 
 // ================== SEND ==================
-void LoRaNode::sendToLoRa(const Packet &pkt) {
+void LoRaNode::sendToLoRa(Packet &pkt) {
     // Create packet with our address as sender
     // Packet format: date_and_time||message_id||channel_id||
     // channel_name||sender_name||sender_id||content
-    Packet outgoing = pkt;
-    outgoing.sender_id = address;
-    
+
     String raw =
-        outgoing.date_and_time + "||" +
-        outgoing.message_id    + "||" +
-        outgoing.channel_id    + "||" +
-        outgoing.channel_name  + "||" +
-        outgoing.sender_name   + "||" +
-        outgoing.sender_id     + "||" +
-        outgoing.content       + "||" +
-        String(outgoing.rssi ? outgoing.rssi : -1) + "||" +
-        String(outgoing.snr ? outgoing.snr : -1)   + "||" +
-        String(outgoing.latency ? outgoing.latency : -1);
+        pkt.date_and_time + "||" +
+        pkt.message_id    + "||" +
+        pkt.channel_id    + "||" +
+        pkt.channel_name  + "||" +
+        pkt.sender_name   + "||" +
+        pkt.sender_id     + "||" +
+        pkt.content       + "||" +
+        String(pkt.rssi ? pkt.rssi : -1) + "||" +
+        String(pkt.snr ? pkt.snr : -1)   + "||" +
+        String(pkt.latency ? pkt.latency : -1);
         
     LoRa.beginPacket();
     LoRa.print(raw);
@@ -60,34 +58,38 @@ void LoRaNode::sendToLoRa(const Packet &pkt) {
     LoRa.receive();
 
     DBG("LORA_TX: " + raw);
-    outgoing.time_stamp = millis();
+    pkt.time_stamp = millis();
     // if this is ours, then we sent it
-    if (outgoing.sender_id == address) {
-        sentMessages[outgoing.message_id] = outgoing.time_stamp;
+    if (pkt.sender_id == address) {
+        sentMessages[pkt.message_id] = pkt.time_stamp;
         return;
     }
     // if this is theirs, then we mark it as seen
-    seenMessages[outgoing.message_id] = outgoing.time_stamp;
+    seenMessages[pkt.message_id] = pkt.time_stamp;
 }
-void LoRaNode::sendToController(const Packet &pkt) {
-    Packet outgoing = pkt;Packet outgoing = pkt;
-    outgoing.sender_id = address;
-    
-    
+void LoRaNode::sendToController(Packet &pkt) {
+
     String raw =
-    outgoing.date_and_time + "||" +
-    outgoing.message_id    + "||" +
-    outgoing.channel_id    + "||" +
-    outgoing.channel_name  + "||" +
-    outgoing.sender_name   + "||" +
-    outgoing.sender_id     + "||" +
-    outgoing.content       + "||" +
-    String(outgoing.rssi ? outgoing.rssi : -1) + "||" +
-    String(outgoing.snr ? outgoing.snr : -1)   + "||" +
-    String(outgoing.latency ? outgoing.latency : -1);
+    pkt.date_and_time + "||" +
+    pkt.message_id    + "||" +
+    pkt.sender_id     + "||" +
+    pkt.channel_id    + "||" +
+    pkt.sender_name   + "||" +
+    pkt.channel_id    + "||" +
+    pkt.content       + "||" +
+    String(pkt.rssi ? pkt.rssi : 0) + "||" +
+    String(pkt.snr ? pkt.snr : 0)   + "||" +
+    String(pkt.latency ? pkt.latency : 0);
 
     DBG("UART_TX: " + raw);
-    Serial.println(raw); // sends to other MCU
+    static String prefix;
+    if (pkt.latency) {
+        prefix = "ack||";
+    }
+    else {
+        prefix = "msg||";
+    }
+    Serial.println(prefix + raw); // sends to other MCU
     markAsSent(pkt.message_id);
     INFO(pkt.message_id + " MARKED AS SENT");
     return;        

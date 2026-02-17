@@ -10,6 +10,7 @@
             "includePath": [
                 "/home/euphoria24/Capstone/ESP32/Hoppy/include",
                 "/home/euphoria24/Capstone/ESP32/Hoppy/src",
+                "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/euphoria24/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
                 "/home/euphoria24/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
@@ -227,7 +228,6 @@
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -248,6 +248,7 @@
                 "path": [
                     "/home/euphoria24/Capstone/ESP32/Hoppy/include",
                     "/home/euphoria24/Capstone/ESP32/Hoppy/src",
+                    "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/euphoria24/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/Keypad/src",
                     "/home/euphoria24/Capstone/ESP32/Hoppy/.pio/libdeps/esp32dev/LoRa/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src",
@@ -465,7 +466,6 @@
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                    "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/home/euphoria24/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -483,7 +483,7 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=60118",
+                "PLATFORMIO=60119",
                 "ARDUINO_ESP32_DEV",
                 "HAVE_CONFIG_H",
                 "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\"",

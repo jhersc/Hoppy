@@ -34,8 +34,8 @@ public:
      * channel_id||channel_name||sender_id||
      * 
      */
-    void sendToLoRa(const Packet &pkt);
-    void sendToController(const Packet &pkt);
+    void sendToLoRa(Packet &pkt);
+    void sendToController(Packet &pkt);
     void processReceived(int packetSize);
 
 
@@ -50,11 +50,9 @@ private:
     Packet received_packet;
     
     // message_id → timestamp (for deduplication)
-    std::map<String, unsigned long> seenMessages;
     static const unsigned long SEEN_TIMEOUT = 60000;  // 1 minute
     
     // Track recently sent message IDs to avoid immediate self-echo
-    std::map<String, unsigned long> sentMessages;
     static const unsigned long SENT_TIMEOUT = 2000;  // 2 seconds
     
     // Track sent message IDs with their sent_millis for latency calculation

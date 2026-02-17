@@ -5,22 +5,9 @@
 
 
 // ================== NODE SETUP ==================
-String generateUniqueId() {
-    // Compact unique ID using millis() in HEX and a small random hex tail
-    char buf[16];
-    // millis() -> hex
-    sprintf(buf, "%lX", millis());
-    String head = String(buf);
-    // random tail (4 hex digits)
-    int tail = random(0, 0x10000); // 0 .. 0xFFFF
-    char tailBuf[8];
-    sprintf(tailBuf, "%X", tail);
-    String tailStr = String(tailBuf);
-    return head + "_" + tailStr;
-}
-
 LoRaNode node(generateUniqueId(), 8);
-
+std::map <String, unsigned long> sentMessages;
+std::map <String, unsigned long> seenMessages;
 // ================== COLOR LOG MACROS ==================
 #define INFO(x)  Serial.println("[INFO] " + String(x))
 #define WARN(x)  Serial.println("[WARN] " + String(x))
@@ -98,9 +85,10 @@ void loop() {
             line.startsWith("[INFO") || line.startsWith("[WARN") ||
             line.startsWith("[DBG") || line.startsWith("[ERR") ||
             line.startsWith("[FATAL")) return;
-
+        if (line.startsWith("msg||") || line.startsWith("ack||")) line = line.substring(5);
         // Parse incoming packet
         Packet pkt;
+        DBG(line);
         parseRawPacket(line, pkt);
         if (!pkt.valid) {
             WARN("Invalid packet format");
@@ -108,7 +96,8 @@ void loop() {
         }
 
         
-        node.sendToController(pkt);
+        // node.sendToController(pkt);
+        node.sendToLoRa(pkt);
         INFO("TX " + pkt.channel_id + " → " + pkt.content);
     }
 
