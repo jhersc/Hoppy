@@ -27,10 +27,10 @@ bool LoRaNode::begin(long frequency) {
     LoRa.setPins(pin_ss, pin_rst, pin_dio0);
 
     if (!LoRa.begin(frequency)) return false;
-
+    // LoRa.setTxPower(17, PA_OUTPUT_PA_BOOST_PIN);
     LoRa.setSpreadingFactor(sf);
     INFO("LoRa initialized");
-    return true;
+    return true; 
 }
 
 
@@ -41,10 +41,13 @@ void LoRaNode::sendMessage(const Packet &pkt) {
         pkt.sender_id  + "||" +
         pkt.message  + "||" +
         pkt.time_stamp;
-
+    
     LoRa.beginPacket();
     LoRa.print(raw);
     LoRa.endPacket();
+    
+
+    Serial.println(raw); // sends to YAGI UDA
 
     DBG("TX: " + raw);
     LoRa.receive();
@@ -84,7 +87,7 @@ void LoRaNode::parsePacket(const String &raw, Packet &pkt) {
     pkt.channel_id = raw.substring(0, i1);
     pkt.message_id = raw.substring(i1 + 2, i2);
     pkt.sender_id  = raw.substring(i2 + 2, i3);
-    pkt.message    = raw.substring(i3 + 2);
+    pkt.message    = raw.substring(i3 + 2, i4);
     pkt.time_stamp = raw.substring(i4 + 2);
     pkt.valid = true;
 }
